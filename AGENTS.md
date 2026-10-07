@@ -2,30 +2,24 @@
 
 ## What
 
-- Provides plugin components under `io.kestra.plugin.mailchimp`.
-- Includes classes such as `Example`, `Trigger`.
+- Provides plugin components under `io.kestra.plugin.mailchimp` to work with Mailchimp from Kestra flows.
+- Work in progress: tasks and triggers are being added, see `src/main/resources/doc/io.kestra.plugin.mailchimp.md`.
 
 ## Why
 
-- What user problem does this solve? Teams need a concrete starting point for building and validating new Kestra plugins without recreating the same project scaffolding from scratch.
-- Why would a team adopt this plugin in a workflow? It gives plugin authors a ready-made reference repo they can adapt alongside their own build, test, and publishing workflow.
-- What operational/business outcome does it enable? It shortens plugin delivery time, reduces setup mistakes, and makes internal or partner plugin development more repeatable.
+- What user problem does this solve? Teams that manage audiences and campaigns in Mailchimp otherwise call its REST API from shell or Python tasks.
+- Why would a team adopt this plugin in a workflow? It keeps Mailchimp steps in the same Kestra flow as upstream data preparation, retries and notifications.
+- What operational/business outcome does it enable? Audience syncs and campaign sends run from a single flow, without custom API glue code.
 
 ## How
 
 ### Architecture
 
-Single-module plugin. Source packages under `io.kestra.plugin`:
+Single-module plugin. Source package under `io.kestra.plugin`:
 
 - `mailchimp`
 
-Infrastructure dependencies (Docker Compose services):
-
-- `app`
-
-### Key Plugin Classes
-
-- `io.kestra.plugin.mailchimp.Example`
+Uses the JDK `java.net.http.HttpClient`; no extra HTTP client or SDK. Kestra's core `HttpClient` is not used because it replays POST on 429/503 and that retry cannot be disabled.
 
 ### Project Structure
 
@@ -47,3 +41,4 @@ plugin-mailchimp/
 
 - https://kestra.io/docs/plugin-developer-guide
 - https://kestra.io/docs/plugin-developer-guide/contribution-guidelines
+- https://mailchimp.com/developer/marketing/api/
