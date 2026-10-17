@@ -77,9 +77,11 @@ public interface MailchimpConnectionInterface {
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException("'baseUrl' is not a valid URL");
             }
-            var local = "http".equals(uri.getScheme()) && ("localhost".equals(uri.getHost()) || "127.0.0.1".equals(uri.getHost()));
-            if (!"https".equals(uri.getScheme()) && !local) {
-                throw new IllegalArgumentException("'baseUrl' must use https (http is only allowed for localhost / 127.0.0.1)");
+            var host = uri.getHost();
+            var local = "http".equals(uri.getScheme()) && ("localhost".equals(host) || "127.0.0.1".equals(host));
+            var mailchimp = "https".equals(uri.getScheme()) && uri.getUserInfo() == null && host != null && host.endsWith(".api.mailchimp.com");
+            if (!local && !mailchimp) {
+                throw new IllegalArgumentException("'baseUrl' must be an https '*.api.mailchimp.com' host (or http on localhost / 127.0.0.1 for tests): the credential is sent to it");
             }
             return url;
         }

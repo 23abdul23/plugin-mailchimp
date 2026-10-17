@@ -50,7 +50,7 @@ public abstract class AbstractMailchimpTrigger extends AbstractTrigger implement
 
     @Schema(
         title = "Base URL override",
-        description = "Replaces `https://<server>.api.mailchimp.com/3.0`. For testing and proxies only; must be https, or http on localhost / 127.0.0.1."
+        description = "Replaces `https://<server>.api.mailchimp.com/3.0`. For testing only: the credential is sent to this URL, so it must be an https `*.api.mailchimp.com` host, or http on localhost / 127.0.0.1."
     )
     @PluginProperty(group = "advanced")
     private Property<String> baseUrl;

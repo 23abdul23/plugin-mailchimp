@@ -85,6 +85,20 @@ class MailchimpConnectionTest {
     }
 
     @Test
+    void baseUrlOutsideMailchimpIsRejected() {
+        for (var url : new String[] {"https://evil.com", "https://api.mailchimp.com.evil.com", "https://user@evil.com/x", "https://evil.com/.api.mailchimp.com", "https://evilapi.mailchimp.com"}) {
+            var task = task().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(url)).build();
+            assertThat(url, assertThrows(IllegalArgumentException.class, () -> MailchimpConnectionInterface.baseUrl(runContextFactory.of(), task)).getMessage(), containsString("baseUrl"));
+        }
+    }
+
+    @Test
+    void baseUrlOnMailchimpIsAccepted() throws Exception {
+        var task = task().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue("https://us19.api.mailchimp.com/3.0/")).build();
+        assertThat(MailchimpConnectionInterface.baseUrl(runContextFactory.of(), task), equalTo("https://us19.api.mailchimp.com/3.0"));
+    }
+
+    @Test
     void toStringDoesNotLeakSecrets() {
         var task = task().apiKey(Property.ofValue("abc-supersecret-us19")).accessToken(Property.ofValue("tok-supersecret")).build();
 
