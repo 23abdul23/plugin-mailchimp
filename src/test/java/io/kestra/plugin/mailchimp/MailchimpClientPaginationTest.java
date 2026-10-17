@@ -8,7 +8,12 @@ import java.util.stream.IntStream;
 
 import org.junit.jupiter.api.Test;
 
+import io.kestra.core.junit.annotations.KestraTest;
+import io.kestra.core.runners.RunContextFactory;
+
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
+
+import jakarta.inject.Inject;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -16,7 +21,11 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.hasSize;
 
+@KestraTest
 class MailchimpClientPaginationTest {
+    @Inject
+    private RunContextFactory runContextFactory;
+
     private static final String PATH = "/3.0/lists/a/members";
 
     private static String page(int from, int n, int total) {
@@ -26,7 +35,7 @@ class MailchimpClientPaginationTest {
 
     private List<String> run(FakeMailchimpServer fake) throws Exception {
         var ids = new ArrayList<String>();
-        try (var client = new MailchimpClient(fake.baseUrl(), "abc-us19", 0, Duration.ofSeconds(10), d -> { })) {
+        try (var client = new MailchimpClient(runContextFactory.of(), fake.baseUrl(), "abc-us19", 0, Duration.ofSeconds(10), d -> { })) {
             client.getPaged("/lists/a/members", null, 1000, items -> items.forEach(i -> ids.add(i.get("id").asText())), "members");
         }
         return ids;
@@ -92,7 +101,7 @@ class MailchimpClientPaginationTest {
 
     @Test
     void nonPositivePageSizeRejected() throws Exception {
-        try (var fake = new FakeMailchimpServer(); var client = new MailchimpClient(fake.baseUrl(), "abc-us19", 0, Duration.ofSeconds(10), d -> { })) {
+        try (var fake = new FakeMailchimpServer(); var client = new MailchimpClient(runContextFactory.of(), fake.baseUrl(), "abc-us19", 0, Duration.ofSeconds(10), d -> { })) {
             org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> client.getPaged("/lists/a/members", null, 0, i -> { }, "members"));
             assertThat(fake.requests(), empty());
         }
@@ -104,7 +113,7 @@ class MailchimpClientPaginationTest {
             fake.on("GET", PATH, Response.json(200, page(0, 1000, 5000)), Response.json(200, page(1000, 1000, 5000)));
             var pages = new ArrayList<Integer>();
 
-            try (var client = new MailchimpClient(fake.baseUrl(), "abc-us19", 0, Duration.ofSeconds(10), d -> { })) {
+            try (var client = new MailchimpClient(runContextFactory.of(), fake.baseUrl(), "abc-us19", 0, Duration.ofSeconds(10), d -> { })) {
                 client.getPagedWhile("/lists/a/members", null, 1000, p -> {
                     pages.add(p.path("members").size());
                     return pages.size() < 2;
@@ -122,7 +131,7 @@ class MailchimpClientPaginationTest {
             fake.on("GET", PATH, Response.json(200, page(0, 0, 0)));
             var totals = new ArrayList<Long>();
 
-            try (var client = new MailchimpClient(fake.baseUrl(), "abc-us19", 0, Duration.ofSeconds(10), d -> { })) {
+            try (var client = new MailchimpClient(runContextFactory.of(), fake.baseUrl(), "abc-us19", 0, Duration.ofSeconds(10), d -> { })) {
                 client.getPagedWhile("/lists/a/members", null, 1000, p -> totals.add(p.get("total_items").asLong()), "members");
             }
 

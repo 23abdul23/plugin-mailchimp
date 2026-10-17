@@ -23,7 +23,7 @@ Single-module plugin. Source packages under `io.kestra.plugin.mailchimp`:
 - `account`, `audiences`, `campaigns`, `reports`: tasks and triggers (one `package-info.java` each)
 - `models`: shared helpers (`CursorPoll`, `TriggerCursor`, `FetchOutput`, `SortDir`, `SubscriberHash`)
 
-Uses the JDK `java.net.http.HttpClient`; no extra HTTP client or SDK. Kestra's core `HttpClient` is not used because it replays POST on 429/503 and that retry cannot be disabled.
+Uses Kestra's core `io.kestra.core.http.client.HttpClient` (no SDK). It replays a request once after a 429/503 and that cannot be configured, so POSTs carry a one-shot stream body, which Apache does not replay (see `MailchimpClient#request`).
 
 ### Project Structure
 

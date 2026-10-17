@@ -185,9 +185,8 @@ class MailchimpConnectionTest {
 
     @Test
     void clientNeverLeaksTokenInHeaderError() {
-        var client = new MailchimpClient("http://localhost:1", "SECRETVALUE\nrest", 0, java.time.Duration.ofSeconds(1), ms -> { });
-
-        var e = assertThrows(IllegalArgumentException.class, () -> client.send("GET", "/ping", null, null));
+        var e = assertThrows(IllegalArgumentException.class,
+            () -> new MailchimpClient(runContextFactory.of(), "http://localhost:1", "SECRETVALUE\nrest", 0, java.time.Duration.ofSeconds(1), ms -> { }));
         assertThat(e.getMessage(), not(containsString("SECRETVALUE")));
     }
 }

@@ -60,8 +60,8 @@ abstract class MailchimpIntegrationBase {
         return Property.ofValue(server());
     }
 
-    protected static MailchimpClient client() {
-        return new MailchimpClient("https://" + server() + ".api.mailchimp.com/3.0", apiKey(), 3, Duration.ofSeconds(60), Thread::sleep);
+    protected MailchimpClient client() throws Exception {
+        return new MailchimpClient(runContextFactory.of(), "https://" + server() + ".api.mailchimp.com/3.0", apiKey(), 3, Duration.ofSeconds(60), Thread::sleep);
     }
 
     /** Optional {@code MAILCHIMP_TEST_EMAIL_DOMAIN}, default {@code example.com}. */
@@ -104,7 +104,7 @@ abstract class MailchimpIntegrationBase {
     }
 
     @AfterEach
-    void cleanup() {
+    void cleanup() throws Exception {
         if (listId() == null || listId().isBlank()) {
             return;
         }

@@ -6,7 +6,12 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
+import io.kestra.core.junit.annotations.KestraTest;
+import io.kestra.core.runners.RunContextFactory;
+
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
+
+import jakarta.inject.Inject;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
@@ -17,22 +22,28 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@KestraTest
 class MailchimpClientTest {
+    @Inject
+    private RunContextFactory runContextFactory;
+
     private final List<Duration> sleeps = new ArrayList<>();
 
     private MailchimpClient client(FakeMailchimpServer fake, int maxRetries) throws Exception {
-        return new MailchimpClient(fake.baseUrl(), "abc-us19", maxRetries, Duration.ofSeconds(10), sleeps::add);
+        return new MailchimpClient(runContextFactory.of(), fake.baseUrl(), "abc-us19", maxRetries, Duration.ofSeconds(10), sleeps::add);
     }
 
+    // Kestra's HttpClient replays an idempotent request once, immediately, after a 429/503 (not configurable): the first
+    // two scripted answers below are that replay's, so our own backoff only starts with the third request.
     @Test
     void retries429Once() throws Exception {
         try (var fake = new FakeMailchimpServer(); var client = client(fake, 3)) {
-            fake.on("GET", "/3.0/ping", Response.empty(429), Response.json(200, "{\"health_status\":\"ok\"}"));
+            fake.on("GET", "/3.0/ping", Response.empty(429), Response.empty(429), Response.json(200, "{\"health_status\":\"ok\"}"));
 
             var result = client.send("GET", "/ping", null, null);
 
             assertThat(result.get("health_status").asText(), equalTo("ok"));
-            assertThat(fake.requests(), hasSize(2));
+            assertThat(fake.requests(), hasSize(3));
             assertThat(sleeps, hasSize(1));
             assertThat(sleeps.getFirst().toMillis(), greaterThanOrEqualTo(500L));
             assertThat(sleeps.getFirst().toMillis(), lessThanOrEqualTo(1000L));
@@ -59,7 +70,7 @@ class MailchimpClientTest {
             var e = assertThrows(MailchimpException.class, () -> client.send("GET", "/ping", null, null));
 
             assertThat(e.getStatus(), equalTo(429));
-            assertThat(fake.requests(), hasSize(4));
+            assertThat(fake.requests(), hasSize(8)); // 4 attempts, each followed by Kestra's single replay
             assertThat(sleeps, hasSize(3));
         }
     }
@@ -67,11 +78,11 @@ class MailchimpClientTest {
     @Test
     void honorsRetryAfterWhenPresent() throws Exception {
         try (var fake = new FakeMailchimpServer(); var client = client(fake, 3)) {
-            fake.on("GET", "/3.0/ping", Response.empty(429).withHeader("Retry-After", "7"), Response.json(200, "{}"));
+            fake.on("GET", "/3.0/ping", Response.empty(429).withHeader("Retry-After", "2"), Response.empty(429).withHeader("Retry-After", "2"), Response.json(200, "{}"));
 
             client.send("GET", "/ping", null, null);
 
-            assertThat(sleeps.getFirst(), equalTo(Duration.ofSeconds(7)));
+            assertThat(sleeps.getFirst(), equalTo(Duration.ofSeconds(2)));
         }
     }
 
@@ -143,18 +154,19 @@ class MailchimpClientTest {
     @Test
     void zeroMaxRetriesNeverRetries() throws Exception {
         try (var fake = new FakeMailchimpServer(); var client = client(fake, 0)) {
-            fake.on("GET", "/3.0/ping", Response.empty(429), Response.json(200, "{}"));
+            fake.on("GET", "/3.0/ping", Response.empty(429), Response.empty(429), Response.json(200, "{}"));
 
             var e = assertThrows(MailchimpException.class, () -> client.send("GET", "/ping", null, null));
 
             assertThat(e.getStatus(), equalTo(429));
-            assertThat(fake.requests(), hasSize(1));
+            assertThat(fake.requests(), hasSize(2)); // our loop never retries; the 2nd request is Kestra's own single replay
+            assertThat(sleeps, empty());
             assertThat(sleeps, empty());
         }
     }
 
-    private MailchimpClient shortTimeoutClient(FakeMailchimpServer fake) {
-        return new MailchimpClient(fake.baseUrl(), "abc-us19", 3, Duration.ofMillis(250), sleeps::add);
+    private MailchimpClient shortTimeoutClient(FakeMailchimpServer fake) throws Exception {
+        return new MailchimpClient(runContextFactory.of(), fake.baseUrl(), "abc-us19", 3, Duration.ofMillis(250), sleeps::add);
     }
 
     @Test
@@ -196,7 +208,7 @@ class MailchimpClientTest {
     @Test
     void negativeRetryAfterIsClamped() throws Exception {
         try (var fake = new FakeMailchimpServer(); var client = client(fake, 3)) {
-            fake.on("GET", "/3.0/ping", Response.empty(429).withHeader("Retry-After", "-5"), Response.json(200, "{}"));
+            fake.on("GET", "/3.0/ping", Response.empty(429).withHeader("Retry-After", "-5"), Response.empty(429).withHeader("Retry-After", "-5"), Response.json(200, "{}"));
 
             client.send("GET", "/ping", null, null);
 

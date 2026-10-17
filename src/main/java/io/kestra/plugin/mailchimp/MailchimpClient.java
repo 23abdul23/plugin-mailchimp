@@ -1,12 +1,10 @@
 package io.kestra.plugin.mailchimp;
 
+import java.io.ByteArrayInputStream;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -19,17 +17,28 @@ import java.util.function.Predicate;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 
+import io.kestra.core.http.HttpRequest;
+import io.kestra.core.http.HttpResponse;
+import io.kestra.core.http.client.HttpClient;
+import io.kestra.core.http.client.HttpClientException;
+import io.kestra.core.http.client.configurations.BearerAuthConfiguration;
+import io.kestra.core.http.client.configurations.HttpConfiguration;
+import io.kestra.core.http.client.configurations.TimeoutConfiguration;
+import io.kestra.core.models.property.Property;
+import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.JacksonMapper;
 
 
 
 /**
- * Thin Mailchimp Marketing API client: bearer auth, no redirect following, retry with exponential backoff and
- * error mapping to {@link MailchimpException}.
+ * Thin Mailchimp Marketing API client on Kestra's own {@link HttpClient} (platform proxy, TLS and, from Kestra 2.0, the
+ * HTTP allow/deny list): bearer auth, no redirect following, retry with exponential backoff and error mapping to
+ * {@link MailchimpException}.
  *
- * <p>It uses the JDK {@link HttpClient} rather than Kestra's own one: the latter sits on Apache HttpClient, whose
- * built-in retry strategy silently replays 429/503 (including POST) and cannot be turned off, which would break
- * the retry rules below.
+ * <p>Kestra's client sits on Apache HttpClient, whose built-in retry cannot be configured from here: it replays a
+ * request once, immediately, after a 429 or 503 when the request body can be re-read (verified against core 1.3.39). For
+ * a POST that would risk a duplicate send, so POST bodies are one-shot streams (see {@link #request}); GET and PUT may be
+ * replayed, they are idempotent. Our own retry rules below sit on top of that.
  */
 public class MailchimpClient implements Closeable {
     /** Injected so tests do not actually sleep. */
@@ -44,70 +53,91 @@ public class MailchimpClient implements Closeable {
 
     private final HttpClient http;
     private final String baseUrl;
-    private final String token;
     private final int maxRetries;
-    private final Duration timeout;
     private final Sleeper sleeper;
 
-    public MailchimpClient(String baseUrl, String token, int maxRetries, Duration timeout, Sleeper sleeper) {
+    public MailchimpClient(RunContext runContext, String baseUrl, String token, int maxRetries, Duration timeout, Sleeper sleeper) throws Exception {
+        if (token.chars().anyMatch(c -> c < 0x21 || c == 0x7f)) {
+            // never echo the value: it is the secret
+            throw new IllegalArgumentException("Invalid credential: it cannot be sent as an HTTP header value");
+        }
         this.baseUrl = baseUrl;
-        this.token = token;
         this.maxRetries = maxRetries;
-        this.timeout = timeout;
         this.sleeper = sleeper;
-        this.http = HttpClient.newBuilder()
-            .followRedirects(HttpClient.Redirect.NEVER) // a redirect to another host must never receive the credential
-            .connectTimeout(Duration.ofSeconds(10))
+        this.http = HttpClient.builder()
+            .runContext(runContext)
+            .configuration(HttpConfiguration.builder()
+                .followRedirects(Property.ofValue(false)) // a redirect to another host must never receive the credential
+                .allowFailed(Property.ofValue(true)) // 4xx/5xx come back as responses; errors are mapped here
+                .timeout(TimeoutConfiguration.builder()
+                    .connectTimeout(Property.ofValue(Duration.ofSeconds(10)))
+                    .readIdleTimeout(Property.ofValue(timeout))
+                    .build())
+                .auth(BearerAuthConfiguration.builder().token(Property.ofValue(token)).build())
+                .build())
             .build();
     }
 
     /** @param path relative to the API root, e.g. {@code /lists/abc/members} */
     public JsonNode send(String method, String path, Map<String, String> query, Object body) throws Exception {
-        var builder = HttpRequest.newBuilder(uri(path, query))
-            .timeout(timeout)
-            .header("Accept", "application/json");
-        try {
-            builder.header("Authorization", "Bearer " + token);
-        } catch (IllegalArgumentException e) {
-            // the JDK message quotes the header value, i.e. the secret: never propagate it
-            throw new IllegalArgumentException("Invalid credential: it cannot be sent as an HTTP header value");
-        }
-        if (body != null) {
-            builder.header("Content-Type", "application/json")
-                .method(method, HttpRequest.BodyPublishers.ofString(JacksonMapper.ofJson().writeValueAsString(body)));
-        } else {
-            builder.method(method, HttpRequest.BodyPublishers.noBody());
-        }
-        var request = builder.build();
+        var uri = uri(path, query);
         var retryable = IDEMPOTENT.contains(method.toUpperCase());
+        var json = body != null ? JacksonMapper.ofJson().writeValueAsString(body) : retryable ? null : "{}";
 
         for (int attempt = 0; ; attempt++) {
             HttpResponse<String> response;
             try {
-                response = http.send(request, HttpResponse.BodyHandlers.ofString());
-            } catch (IOException e) {
+                response = http.request(request(method, uri, json, retryable), String.class);
+            } catch (HttpClientException | RuntimeException e) {
                 // timeouts and connection errors: only safe to repeat for idempotent calls
+                if (!hasIoCause(e)) {
+                    throw e;
+                }
                 if (retryable && attempt < maxRetries) {
                     sleeper.sleep(delay(attempt, null));
                     continue;
                 }
-                throw e;
+                throw new IOException(e.getMessage(), e);
             }
 
-            var status = response.statusCode();
+            var status = response.getStatus().getCode();
             if (status >= 200 && status < 300) {
                 try {
-                    return parse(response.body());
+                    return parse(response.getBody());
                 } catch (IOException e) {
                     throw new MailchimpException(status, "Invalid JSON response", null, null);
                 }
             }
             if (attempt < maxRetries && (status == 429 || (status >= 500 && retryable))) {
-                sleeper.sleep(delay(attempt, response.headers().firstValue("Retry-After").orElse(null)));
+                sleeper.sleep(delay(attempt, response.getHeaders().firstValue("Retry-After").orElse(null)));
                 continue;
             }
             throw error(status, response);
         }
+    }
+
+    /**
+     * Built again for every attempt. A POST gets a one-shot stream entity: Apache only replays a request whose entity
+     * can be re-read, so this switches its built-in replay (once, after a 429/503) off and a send or batch POST is
+     * never repeated behind our back. A POST without payload sends {@code {}} so that it has an entity too.
+     */
+    private static HttpRequest request(String method, URI uri, String json, boolean replayable) {
+        var builder = HttpRequest.builder().method(method).uri(uri).addHeader("Accept", "application/json");
+        if (json != null) {
+            builder.body(replayable
+                ? HttpRequest.StringRequestBody.builder().content(json).contentType("application/json").build()
+                : HttpRequest.InputStreamRequestBody.builder().content(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))).contentType("application/json").build());
+        }
+        return builder.build();
+    }
+
+    private static boolean hasIoCause(Throwable e) {
+        for (var t = e; t != null; t = t.getCause()) {
+            if (t instanceof IOException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -206,7 +236,7 @@ public class MailchimpClient implements Closeable {
         String detail = null;
         var fields = new LinkedHashMap<String, String>();
         try {
-            var json = parse(response.body());
+            var json = parse(response.getBody());
             title = json.path("title").asText(null);
             detail = json.path("detail").asText(null);
             for (var err : json.path("errors")) {
@@ -221,7 +251,7 @@ public class MailchimpClient implements Closeable {
         if (status == 401) {
             detail = "Mailchimp credentials invalid or revoked" + (detail == null || detail.isBlank() ? "" : " (" + detail + ")");
         } else if (status >= 300 && status < 400) {
-            detail = "redirect to '" + response.headers().firstValue("Location").orElse("?") + "' not followed";
+            detail = "redirect to '" + response.getHeaders().firstValue("Location").orElse("?") + "' not followed";
         }
         return new MailchimpException(status, title, detail, fields);
     }
@@ -243,7 +273,7 @@ public class MailchimpClient implements Closeable {
     }
 
     @Override
-    public void close() {
+    public void close() throws IOException {
         http.close();
     }
 }

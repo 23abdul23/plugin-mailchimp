@@ -35,7 +35,7 @@ public interface MailchimpConnectionInterface {
             throw new IllegalArgumentException("'maxRetries' must be >= 0");
         }
         var timeout = runContext.render(connection.getTimeout()).as(Duration.class).orElse(Duration.ofSeconds(120));
-        return new MailchimpClient(baseUrl, token, maxRetries, timeout, Thread::sleep);
+        return new MailchimpClient(runContext, baseUrl, token, maxRetries, timeout, Thread::sleep);
     }
 
     private static String token(RunContext runContext, MailchimpConnectionInterface connection) throws Exception {
