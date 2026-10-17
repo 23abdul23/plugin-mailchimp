@@ -168,6 +168,23 @@ class BatchSubscribeTest {
     }
 
     @Test
+    void rejectedMembersInTheOutputAreCappedButErrorCountIsTheTotal() throws Exception {
+        try (var fake = new FakeMailchimpServer()) {
+            var errors = IntStream.range(0, 500)
+                .mapToObj(i -> "{\"email_address\":\"bad" + i + "@x.test\",\"error\":\"no\",\"error_code\":\"ERROR_X\"}")
+                .collect(Collectors.joining(","));
+            var chunk = "{\"total_created\":0,\"total_updated\":0,\"error_count\":500,\"errors\":[" + errors + "]}";
+            fake.on("POST", PATH, Response.json(200, chunk), Response.json(200, chunk), Response.json(200, chunk));
+            var rc = runContextFactory.of();
+
+            var out = task(fake, store(rc, rows(1500))).failOnError(Property.ofValue(false)).build().run(rc);
+
+            assertThat(out.getErrorCount(), is(1500L));
+            assertThat(out.getErrors(), hasSize(BatchSubscribe.MAX_ERRORS));
+        }
+    }
+
+    @Test
     void failOnErrorFalseReturnsErrorsInOutput() throws Exception {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("POST", PATH, Response.json(200, "{\"total_created\":498,\"total_updated\":0,\"error_count\":2,\"errors\":["

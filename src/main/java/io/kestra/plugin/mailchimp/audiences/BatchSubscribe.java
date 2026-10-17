@@ -1,9 +1,6 @@
 package io.kestra.plugin.mailchimp.audiences;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -32,7 +29,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
-import reactor.core.publisher.Flux;
 
 @SuperBuilder
 @ToString(callSuper = true)
@@ -74,6 +70,8 @@ import reactor.core.publisher.Flux;
 public class BatchSubscribe extends AbstractMailchimpTask implements RunnableTask<BatchSubscribe.Output> {
     private static final int MAX_CHUNK = 500;
     private static final int LISTED_ERRORS = 10;
+    /** Rejected members kept in the output; {@code errorCount} still holds the real total. */
+    static final int MAX_ERRORS = 1000;
     private static final Set<String> STATUSES = Set.of("subscribed", "unsubscribed", "cleaned", "pending", "transactional");
 
     @Schema(title = "Audience ID", description = "Mailchimp audience (list) id, found in the audience settings or with `ListAudiences`.")
@@ -154,6 +152,9 @@ public class BatchSubscribe extends AbstractMailchimpTask implements RunnableTas
                         totals[1] += response.path("total_updated").asLong(0);
                         totals[2] += response.path("error_count").asLong(0);
                         for (var err : response.path("errors")) {
+                            if (errors.size() >= MAX_ERRORS) {
+                                break;
+                            }
                             errors.add(new Output.MemberError(err.path("email_address").asText(null), err.path("error").asText(null), err.path("error_code").asText(null)));
                         }
                         sent[0]++;
@@ -211,9 +212,9 @@ public class BatchSubscribe extends AbstractMailchimpTask implements RunnableTas
 
     @SuppressWarnings("unchecked")
     private static void forEachRow(RunContext runContext, URI uri, RowHandler handler) throws Exception {
-        try (var reader = new BufferedReader(new InputStreamReader(runContext.storage().getFile(uri), StandardCharsets.UTF_8), FileSerde.BUFFER_SIZE)) {
+        try (var in = runContext.storage().getFile(uri)) {
             long n = 0;
-            for (var row : Flux.from(FileSerde.readAll(reader)).toIterable()) {
+            for (var row : FileSerde.readAll(in).toIterable()) {
                 handler.accept(++n, row instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of());
             }
         }
@@ -259,7 +260,7 @@ public class BatchSubscribe extends AbstractMailchimpTask implements RunnableTas
         @Schema(title = "Error count", description = "Members rejected by Mailchimp (`error_count`), summed over all requests.")
         private final long errorCount;
 
-        @Schema(title = "Errors", description = "Rejected members with Mailchimp's message and code. Mailchimp may list fewer than `errorCount`.")
+        @Schema(title = "Errors", description = "Rejected members with Mailchimp's message and code, capped at 1000 entries. Mailchimp may list fewer than `errorCount`; `errorCount` is always the full total.")
         private final List<MemberError> errors;
 
         @Schema(title = "Batches", description = "Number of HTTP requests sent.")

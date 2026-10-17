@@ -1,9 +1,6 @@
 package io.kestra.plugin.mailchimp;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.net.URI;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -12,7 +9,6 @@ import java.util.stream.IntStream;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.FileSerde;
 
-import reactor.core.publisher.Flux;
 
 /** Shared helpers of the read-task tests. */
 public final class ReadTaskSupport {
@@ -27,8 +23,8 @@ public final class ReadTaskSupport {
 
     @SuppressWarnings("unchecked")
     public static List<Map<String, Object>> readIon(RunContext runContext, URI uri) throws Exception {
-        try (var reader = new BufferedReader(new InputStreamReader(runContext.storage().getFile(uri), StandardCharsets.UTF_8))) {
-            return Flux.from(FileSerde.readAll(reader)).map(o -> (Map<String, Object>) o).collectList().block();
+        try (var in = runContext.storage().getFile(uri)) {
+            return FileSerde.readAll(in).map(o -> (Map<String, Object>) o).collectList().block();
         }
     }
 }
