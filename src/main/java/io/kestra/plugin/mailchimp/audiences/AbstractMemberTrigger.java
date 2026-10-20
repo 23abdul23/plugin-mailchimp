@@ -1,6 +1,7 @@
 package io.kestra.plugin.mailchimp.audiences;
 
 import java.net.URI;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -58,6 +59,7 @@ public abstract class AbstractMemberTrigger extends AbstractMailchimpTrigger imp
                     .listId(rListId)
                     .count(r.count())
                     .uri(r.uri())
+                    .rows(r.rows())
                     .build();
             });
     }
@@ -75,15 +77,22 @@ public abstract class AbstractMemberTrigger extends AbstractMailchimpTrigger imp
         @Schema(
             title = "Number of new members",
             description = """
-                Rows in the `uri` file."""
+                Number of new members, as rows in the `uri` file or in `rows`."""
         )
         private final Long count;
 
         @Schema(
             title = "New members URI",
             description = """
-                ION file in internal storage, one row per member, same fields as `ListMembers`, oldest first."""
+                ION file in internal storage, one row per member, same fields as `ListMembers`, oldest first. Set when `fetchType` is `STORE`."""
         )
         private final URI uri;
+
+        @Schema(
+            title = "New members",
+            description = """
+                The new members, same fields as `ListMembers`, oldest first. Set when `fetchType` is `FETCH`."""
+        )
+        private final List<Map<String, Object>> rows;
     }
 }

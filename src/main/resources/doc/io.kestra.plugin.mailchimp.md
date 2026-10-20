@@ -49,18 +49,18 @@ Tasks that return many items (`ListAudiences`, `ListMembers`, `ListCampaigns`, `
 
 ## Triggers
 
-All triggers share `interval` (default `PT5M`, minimum `PT30S`, checked when the flow is saved).
+All triggers share `interval` (default `PT5M`, minimum `PT30S`, checked when the flow is saved) and `fetchType`: `STORE` (default) writes the new items to an ION file and returns its `uri`, `FETCH` returns them in `rows`.
 
-- `audiences.NewSubscriberTrigger` starts an execution when new members join an audience. Required: `listId`. Outputs: `listId`, `count`, `uri`, `cursor`.
-- `audiences.MemberStatusChangeTrigger` starts an execution when members get a given status, such as `UNSUBSCRIBED`. Required: `listId`, `status`. Outputs: `listId`, `count`, `uri`, `cursor`.
-- `campaigns.CampaignSentTrigger` starts an execution when campaigns have been sent. Optional: `listId`, `includeReport`. Outputs: `count`, `uri`, `campaignId`, `sendTime`, `title`, `report`.
+- `audiences.NewSubscriberTrigger` starts an execution when new members join an audience. Required: `listId`. Outputs: `listId`, `count`, `uri` or `rows`.
+- `audiences.MemberStatusChangeTrigger` starts an execution when members get a given status, such as `UNSUBSCRIBED`. Required: `listId`, `status`. Outputs: `listId`, `count`, `uri` or `rows`.
+- `campaigns.CampaignSentTrigger` starts an execution when campaigns have been sent. Optional: `listId`, `includeReport`. Outputs: `count`, `uri` or `rows`, `campaignId`, `sendTime`, `title`, `report`.
 
 How they poll:
 
 - The first poll fires nothing: it only records the current position, so existing members and campaigns do not start executions.
 - Each poll reads one page of up to 1000 items. A larger backlog is drained over several polls.
 - The position (cursor) is kept in the namespace KV Store, per flow and trigger. If a stored cursor cannot be read, the trigger logs a warning and restarts from the current position.
-- Each execution gets a `uri` to an ION file holding the new items, oldest first.
+- Each execution gets the new items, oldest first, as an ION file (`uri`) or in `rows`.
 
 ## Rate limits, retries and concurrency
 

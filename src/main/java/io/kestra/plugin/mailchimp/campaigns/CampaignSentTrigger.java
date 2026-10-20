@@ -4,6 +4,7 @@ import java.net.URI;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -117,6 +118,7 @@ public class CampaignSentTrigger extends AbstractMailchimpTrigger implements Pol
                 return Output.builder()
                     .count(r.count())
                     .uri(r.uri())
+                    .rows(r.rows())
                     .campaignId(campaignId)
                     .sendTime(OffsetDateTime.parse((String) latest.get("sendTime")).toInstant())
                     .title((String) latest.get("title"))
@@ -131,7 +133,7 @@ public class CampaignSentTrigger extends AbstractMailchimpTrigger implements Pol
         @Schema(
             title = "Number of newly sent campaigns",
             description = """
-                Rows in the `uri` file."""
+                Number of newly sent campaigns, as rows in the `uri` file or in `rows`."""
         )
         private final Long count;
 
@@ -141,6 +143,13 @@ public class CampaignSentTrigger extends AbstractMailchimpTrigger implements Pol
                 ION file in internal storage, one row per campaign, same fields as `ListCampaigns`, oldest first."""
         )
         private final URI uri;
+
+        @Schema(
+            title = "Sent campaigns",
+            description = """
+                The newly sent campaigns, same fields as `ListCampaigns`, oldest first. Set when `fetchType` is `FETCH`."""
+        )
+        private final List<Map<String, Object>> rows;
 
         @Schema(
             title = "Latest campaign ID",

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.TreeSet;
@@ -57,14 +58,17 @@ public final class CursorPoll {
     }
 
     /** New rows of one poll. Call {@link #commit()} once the execution is built to persist the advanced cursor. */
-    public record Result(long count, URI uri, TriggerCursor cursor, Map<String, Object> latest, KVStore kv, String key) {
+    public record Result(long count, URI uri, List<Map<String, Object>> rows, TriggerCursor cursor, Map<String, Object> latest, KVStore kv, String key) {
         public void commit() throws IOException {
             put(kv, key, cursor);
         }
     }
 
     /** First poll (or unreadable cursor): records the current position and returns empty. Later polls return the new rows, or empty. */
-    public static Optional<Result> poll(RunContext runContext, TriggerContext context, MailchimpClient client, Spec spec) throws Exception {
+    public static Optional<Result> poll(RunContext runContext, TriggerContext context, MailchimpClient client, Spec spec, FetchType fetchType) throws Exception {
+        if (fetchType != FetchType.STORE && fetchType != FetchType.FETCH) {
+            throw new IllegalArgumentException("A trigger's 'fetchType' must be STORE or FETCH, got " + fetchType);
+        }
         var logger = runContext.logger();
         var kv = runContext.namespaceKv(context.getNamespace());
         // length-prefixed flow and trigger ids: no collision across flows or segment splits
@@ -112,7 +116,7 @@ public final class CursorPoll {
             TriggerCursor running = cursor; // advanced page by page, never recomputed over everything read
             int advancedTo;
         };
-        try (var collector = Fetcher.collector(runContext, FetchType.STORE, null, spec.arrayField(), node -> {
+        try (var collector = Fetcher.collector(runContext, fetchType, null, spec.arrayField(), node -> {
             var item = item(node, spec, logger);
             item.ifPresent(read::add);
             item = item.filter(i -> spec.filter().test(node) && cursor.isNew(i.timestamp(), i.id()) && seen.add(i.id()));
@@ -143,7 +147,7 @@ public final class CursorPoll {
                 return Optional.empty();
             }
             var out = collector.build();
-            return Optional.of(new Result(out.getSize(), out.getUri(), next, latest.row, kv, key));
+            return Optional.of(new Result(out.getSize(), out.getUri(), out.getRows(), next, latest.row, kv, key));
         }
     }
 

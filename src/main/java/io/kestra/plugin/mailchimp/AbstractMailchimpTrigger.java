@@ -10,6 +10,7 @@ import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.Output;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.triggers.AbstractTrigger;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.models.triggers.TriggerService;
@@ -105,6 +106,17 @@ public abstract class AbstractMailchimpTrigger extends AbstractTrigger implement
         return interval == null || interval.compareTo(MIN_INTERVAL) >= 0;
     }
 
+    @Builder.Default
+    @Schema(
+        title = "Fetch strategy",
+        description = """
+            `STORE`: write the new rows as ION to internal storage and return the `uri`.
+            `FETCH`: return the new rows in `rows` (at most one page of 1000, or more when they share one timestamp).
+            Default `STORE`."""
+    )
+    @PluginProperty(group = "processing")
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.STORE);
+
     @FunctionalInterface
     protected interface OutputBuilder {
         Output build(MailchimpClient client, CursorPoll.Result result) throws Exception;
@@ -114,7 +126,7 @@ public abstract class AbstractMailchimpTrigger extends AbstractTrigger implement
     protected Optional<Execution> poll(ConditionContext conditionContext, TriggerContext context, CursorPoll.Spec spec, OutputBuilder outputBuilder) throws Exception {
         var runContext = conditionContext.getRunContext();
         try (var client = client(runContext)) {
-            var result = CursorPoll.poll(runContext, context, client, spec);
+            var result = CursorPoll.poll(runContext, context, client, spec, runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE));
             if (result.isEmpty()) {
                 return Optional.empty();
             }

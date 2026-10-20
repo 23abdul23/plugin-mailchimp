@@ -102,8 +102,6 @@ Optional tests in `io.kestra.plugin.mailchimp.integration` call the real Mailchi
 
 Cleanup uses `DELETE`, which only archives members: they are not permanently deleted, and tags or audience stats may keep residual test data. Mailchimp rejects `example.com`, `example.org` and `example.net` ("looks fake" / "not a valid email address"; checked against a live account), so set `MAILCHIMP_TEST_EMAIL_DOMAIN` to a domain that has MX records and ideally one you control; members are only ever written as `unsubscribed`, so nothing is mailed.
 
-The `Integration tests` GitHub workflow runs the same command on manual dispatch, reading the same names from repository secrets.
-
 ## Running Kestra locally with this plugin
 
 1. Build the plugin: `./gradlew build` (or `./gradlew shadowJar`). The jar lands in `build/libs/`.

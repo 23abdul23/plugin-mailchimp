@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.property.Property;
+import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.models.triggers.Trigger;
 import io.kestra.core.models.validations.ModelValidator;
 import io.kestra.core.runners.RunContextFactory;
@@ -90,6 +91,34 @@ class NewSubscriberTriggerTest {
 
             assertThat(cursor(ctx, KIND, "L1").orElseThrow(), equalTo(new TriggerCursor(at("05"), new TreeSet<>(List.of("m2")))));
             assertThat(fake.requests().getFirst().query(), equalTo("status=subscribed&sort_field=timestamp_opt&sort_dir=DESC&count=1000&offset=0&fields=members.id%2Cmembers.timestamp_opt"));
+        }
+    }
+
+    @Test
+    void fetchReturnsTheRowsInTheExecutionInsteadOfAFile() throws Exception {
+        try (var fake = new FakeMailchimpServer()) {
+            var trigger = trigger(fake).fetchType(Property.ofValue(FetchType.FETCH)).build();
+            var ctx = ctx(trigger);
+            fake.on("GET", PATH, Response.json(200, page("members", m("m1", "05"))));
+            trigger.evaluate(ctx.getKey(), ctx.getValue());
+
+            fake.on("GET", PATH, Response.json(200, page("members", m("m1", "05"), m("m2", "10"))));
+            var execution = trigger.evaluate(ctx.getKey(), ctx.getValue()).orElseThrow();
+
+            assertThat(((List<?>) vars(execution).get("rows")).size(), is(1));
+            assertThat(vars(execution).get("uri"), is((Object) null));
+        }
+    }
+
+    @Test
+    void fetchOneIsRefusedBecauseItWouldStopReadingEarly() throws Exception {
+        try (var fake = new FakeMailchimpServer()) {
+            var trigger = trigger(fake).fetchType(Property.ofValue(FetchType.FETCH_ONE)).build();
+            var ctx = ctx(trigger);
+
+            var e = assertThrows(IllegalArgumentException.class, () -> trigger.evaluate(ctx.getKey(), ctx.getValue()));
+
+            assertThat(e.getMessage(), containsString("STORE or FETCH"));
         }
     }
 
