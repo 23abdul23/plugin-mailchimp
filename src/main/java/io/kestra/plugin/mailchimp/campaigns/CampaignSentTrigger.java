@@ -1,6 +1,8 @@
 package io.kestra.plugin.mailchimp.campaigns;
 
 import java.net.URI;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -17,8 +19,8 @@ import io.kestra.core.models.triggers.TriggerOutput;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTrigger;
 import io.kestra.plugin.mailchimp.MailchimpClient;
 import io.kestra.plugin.mailchimp.MailchimpException;
-import io.kestra.plugin.mailchimp.models.CursorPoll;
-import io.kestra.plugin.mailchimp.models.FetchOutput;
+import io.kestra.plugin.mailchimp.models.Rows;
+import io.kestra.plugin.mailchimp.polling.CursorPoll;
 import io.kestra.plugin.mailchimp.reports.GetCampaignReport;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -90,7 +92,7 @@ public class CampaignSentTrigger extends AbstractMailchimpTrigger implements Pol
         var query = new LinkedHashMap<String, String>();
         query.put("status", "sent");
         var rListId = runContext.render(listId).as(String.class).filter(s -> !s.isBlank());
-        FetchOutput.put(query, "list_id", rListId);
+        Rows.put(query, "list_id", rListId);
 
         return poll(conditionContext, context,
             new CursorPoll.Spec("campaign_sent", "campaign_" + rListId.orElse("all"), "/campaigns", "campaigns", query, "send_time", node -> true, ListCampaigns::toRow),
@@ -102,7 +104,7 @@ public class CampaignSentTrigger extends AbstractMailchimpTrigger implements Pol
                 Map<String, Object> report = null;
                 if (runContext.render(includeReport).as(Boolean.class).orElse(false)) {
                     try {
-                        report = FetchOutput.row(client.sendForBody("GET", "/reports/" + MailchimpClient.segment(campaignId), null, null), GetCampaignReport.CAMEL);
+                        report = Rows.row(client.sendForBody("GET", "/reports/" + MailchimpClient.segment(campaignId), null, null), GetCampaignReport.CAMEL);
                     } catch (MailchimpException e) {
                         // no report (yet) must not block the trigger; any other error fails the poll and nothing advances
                         if (e.getStatus() != 404) {
@@ -116,7 +118,7 @@ public class CampaignSentTrigger extends AbstractMailchimpTrigger implements Pol
                     .count(r.count())
                     .uri(r.uri())
                     .campaignId(campaignId)
-                    .sendTime((String) latest.get("sendTime"))
+                    .sendTime(OffsetDateTime.parse((String) latest.get("sendTime")).toInstant())
                     .title((String) latest.get("title"))
                     .report(report)
                     .build();
@@ -150,9 +152,9 @@ public class CampaignSentTrigger extends AbstractMailchimpTrigger implements Pol
         @Schema(
             title = "Latest campaign send time",
             description = """
-                ISO-8601, as returned by Mailchimp."""
+                Send time of the latest campaign."""
         )
-        private final String sendTime;
+        private final Instant sendTime;
 
         @Schema(
             title = "Latest campaign title",

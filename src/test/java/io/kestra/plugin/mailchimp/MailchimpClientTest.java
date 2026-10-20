@@ -1,8 +1,10 @@
 package io.kestra.plugin.mailchimp;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -33,8 +35,7 @@ class MailchimpClientTest {
         return new MailchimpClient(runContextFactory.of(), fake.baseUrl(), "abc-us19", maxRetries, Duration.ofSeconds(10), sleeps::add);
     }
 
-    // Kestra's HttpClient replays an idempotent request once, immediately, after a 429/503 (not configurable): the first
-    // two scripted answers below are that replay's, so our own backoff only starts with the third request.
+    // Kestra's HttpClient replays a GET/PUT once after a 429/503, so our own backoff starts with the third request
     @Test
     void retries429Once() throws Exception {
         try (var fake = new FakeMailchimpServer(); var client = client(fake, 3)) {
@@ -55,7 +56,7 @@ class MailchimpClientTest {
         try (var fake = new FakeMailchimpServer(); var client = client(fake, 3)) {
             fake.on("POST", "/3.0/lists", Response.empty(429), Response.json(200, "{}"));
 
-            client.send("POST", "/lists", null, java.util.Map.of("name", "x"));
+            client.send("POST", "/lists", null, Map.of("name", "x"));
 
             assertThat(fake.requests(), hasSize(2));
             assertThat(fake.requests().getLast().body(), containsString("\"name\":\"x\""));
@@ -102,7 +103,7 @@ class MailchimpClientTest {
         try (var fake = new FakeMailchimpServer(); var client = client(fake, 3)) {
             fake.on("POST", "/3.0/lists", Response.json(503, "{\"title\":\"Service Unavailable\"}"), Response.json(200, "{}"));
 
-            var e = assertThrows(MailchimpException.class, () -> client.send("POST", "/lists", null, java.util.Map.of()));
+            var e = assertThrows(MailchimpException.class, () -> client.send("POST", "/lists", null, Map.of()));
 
             assertThat(e.getStatus(), equalTo(503));
             assertThat(fake.requests(), hasSize(1));
@@ -130,7 +131,7 @@ class MailchimpClientTest {
                 {"title":"Invalid Resource","status":400,"detail":"The resource submitted could not be validated.",
                  "errors":[{"field":"email_address","message":"This value should be a valid email."}]}"""));
 
-            var e = assertThrows(MailchimpException.class, () -> client.send("POST", "/lists/a/members", null, java.util.Map.of()));
+            var e = assertThrows(MailchimpException.class, () -> client.send("POST", "/lists/a/members", null, Map.of()));
 
             assertThat(e.getTitle(), equalTo("Invalid Resource"));
             assertThat(e.getFieldErrors().get("email_address"), equalTo("This value should be a valid email."));
@@ -187,7 +188,7 @@ class MailchimpClientTest {
         try (var fake = new FakeMailchimpServer(); var client = shortTimeoutClient(fake)) {
             fake.on("POST", "/3.0/lists", Response.json(200, "{}").delayed(1000), Response.json(200, "{}"));
 
-            assertThrows(java.io.IOException.class, () -> client.send("POST", "/lists", null, java.util.Map.of()));
+            assertThrows(IOException.class, () -> client.send("POST", "/lists", null, Map.of()));
 
             assertThat(fake.requests(), hasSize(1));
             assertThat(sleeps, empty());
@@ -199,7 +200,7 @@ class MailchimpClientTest {
         try (var fake = new FakeMailchimpServer(); var client = client(fake, 3)) {
             fake.on("PUT", "/3.0/lists/a/members/h", Response.json(503, "{}"), Response.json(200, "{}"));
 
-            client.send("PUT", "/lists/a/members/h", null, java.util.Map.of());
+            client.send("PUT", "/lists/a/members/h", null, Map.of());
 
             assertThat(fake.requests(), hasSize(2));
         }
@@ -221,12 +222,12 @@ class MailchimpClientTest {
         try (var fake = new FakeMailchimpServer(); var client = client(fake, 0)) {
             fake.on("POST", "/3.0/x", Response.json(200, "{}"));
 
-            client.send("POST", "/x", null, java.util.Map.of("a", "b"));
+            client.send("POST", "/x", null, Map.of("a", "b"));
             client.send("POST", "/x", null, null);
 
             var requests = fake.requests();
-            assertThat(requests.get(0).header("content-length"), equalTo("9"));
-            assertThat(requests.get(0).header("transfer-encoding"), equalTo(null));
+            assertThat(requests.getFirst().header("content-length"), equalTo("9"));
+            assertThat(requests.getFirst().header("transfer-encoding"), equalTo(null));
             assertThat(requests.get(1).header("content-length"), equalTo("2"));
         }
     }

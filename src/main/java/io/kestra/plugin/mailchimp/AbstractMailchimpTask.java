@@ -2,8 +2,6 @@ package io.kestra.plugin.mailchimp;
 
 import java.time.Duration;
 
-import com.google.common.annotations.VisibleForTesting;
-
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.Task;
@@ -78,7 +76,6 @@ public abstract class AbstractMailchimpTask extends Task implements MailchimpCon
     @PluginProperty(group = "advanced")
     private Property<Duration> timeout = Property.ofValue(Duration.ofSeconds(120));
 
-    @VisibleForTesting
     protected MailchimpClient client(RunContext runContext) throws Exception {
         return MailchimpConnectionInterface.client(runContext, this);
     }

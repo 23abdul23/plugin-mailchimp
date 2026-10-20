@@ -12,6 +12,7 @@ import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.serializers.JacksonMapper;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 import io.kestra.plugin.mailchimp.account.Ping;
@@ -47,7 +48,7 @@ class RenderingTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("GET", "/3.0/ping", Response.json(200, "{\"health_status\":\"Everything's Chimpy!\"}"));
 
-            Ping.builder().apiKey(expr("{{ inputs.key }}")).baseUrl(Property.ofValue(fake.baseUrl())).build()
+            Ping.builder().id(IdUtils.create()).type(Ping.class.getName()).apiKey(expr("{{ inputs.key }}")).baseUrl(Property.ofValue(fake.baseUrl())).build()
                 .run(runContextFactory.of(Map.of("inputs", Map.of("key", "abc-us19"))));
 
             assertThat(fake.requests().getFirst().header("authorization"), equalTo("Bearer abc-us19"));
@@ -59,7 +60,7 @@ class RenderingTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("GET", "/3.0/lists/L1/members", Response.json(200, ReadTaskSupport.page("members", 0, 1, 1)));
 
-            ListMembers.builder().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
+            ListMembers.builder().id(IdUtils.create()).type(ListMembers.class.getName()).apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
                 .listId(expr("{{ inputs.list }}"))
                 .status(Property.ofExpression("{{ inputs.status }}"))
                 .sinceLastChanged(Property.ofExpression("{{ inputs.since }}"))
@@ -77,7 +78,7 @@ class RenderingTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("PUT", "/3.0/lists/L1/members/6a58e7286ac0e6944c137f0fb3f101b1", Response.json(200, "{\"id\":\"x\",\"status\":\"subscribed\"}"));
 
-            UpsertMember.builder().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
+            UpsertMember.builder().id(IdUtils.create()).type(UpsertMember.class.getName()).apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
                 .listId(Property.ofValue("L1"))
                 .email(expr("{{ inputs.email }}"))
                 .statusIfNew(Property.ofExpression("{{ inputs.status }}"))
@@ -99,7 +100,7 @@ class RenderingTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("GET", "/3.0/campaigns", Response.json(200, ReadTaskSupport.page("campaigns", 0, 1, 1)));
 
-            ListCampaigns.builder().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
+            ListCampaigns.builder().id(IdUtils.create()).type(ListCampaigns.class.getName()).apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
                 .status(Property.ofExpression("{{ inputs.status }}"))
                 .build()
                 .run(runContextFactory.of(Map.of("inputs", Map.of("status", "SENT"))));
@@ -113,7 +114,7 @@ class RenderingTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("GET", "/3.0/reports/c1", Response.json(200, "{\"id\":\"c1\",\"emails_sent\":1}"));
 
-            GetCampaignReport.builder().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
+            GetCampaignReport.builder().id(IdUtils.create()).type(GetCampaignReport.class.getName()).apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
                 .campaignId(expr("{{ inputs.campaign }}"))
                 .build()
                 .run(runContextFactory.of(Map.of("inputs", Map.of("campaign", "c1"))));

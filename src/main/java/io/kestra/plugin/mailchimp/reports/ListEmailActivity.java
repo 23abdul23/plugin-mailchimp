@@ -8,13 +8,13 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
-import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
-import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
+import io.kestra.plugin.mailchimp.AbstractMailchimpFetchTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
 import io.kestra.plugin.mailchimp.models.FetchOutput;
+import io.kestra.plugin.mailchimp.models.Rows;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -57,7 +57,7 @@ import lombok.experimental.SuperBuilder;
         )
     }
 )
-public class ListEmailActivity extends AbstractMailchimpTask implements RunnableTask<FetchOutput> {
+public class ListEmailActivity extends AbstractMailchimpFetchTask {
     private static final Set<String> CAMEL = Set.of("email_address", "email_id");
 
     @Schema(
@@ -86,43 +86,15 @@ public class ListEmailActivity extends AbstractMailchimpTask implements Runnable
     @PluginProperty(group = "processing")
     private Property<Boolean> filterBots = Property.ofValue(false);
 
-    @Schema(
-        title = "Fetch strategy",
-        description = """
-            `FETCH_ONE`: first recipient only.
-            `FETCH`: all recipients in memory.
-            `STORE` (default): write rows as ION to internal storage and return the URI.
-            `NONE`: only count them."""
-    )
-    @Builder.Default
-    @PluginProperty(group = "processing")
-    private Property<FetchType> fetchType = Property.ofValue(FetchType.STORE);
-
-    @Schema(
-        title = "Max items",
-        minimum = "1",
-        description = """
-            Stop after this many recipients (default: unlimited). Must be at least 1."""
-    )
-    @PluginProperty(group = "processing")
-    private Property<Integer> maxItems;
-
     @Override
     public FetchOutput run(RunContext runContext) throws Exception {
         var rCampaignId = MailchimpConnectionInterface.required(runContext, campaignId, "campaignId");
         var path = "/reports/" + MailchimpClient.segment(rCampaignId) + "/email-activity";
 
         var query = new LinkedHashMap<String, String>();
-        FetchOutput.put(query, "since", runContext.render(since).as(Instant.class));
-        FetchOutput.put(query, "filter_bots", runContext.render(filterBots).as(Boolean.class).filter(Boolean::booleanValue));
+        Rows.put(query, "since", runContext.render(since).as(Instant.class));
+        Rows.put(query, "filter_bots", runContext.render(filterBots).as(Boolean.class).filter(Boolean::booleanValue));
 
-        try (var client = client(runContext)) {
-            return FetchOutput.fetchPaged(
-                runContext, client, path, query, "emails",
-                runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE),
-                runContext.render(maxItems).as(Integer.class).orElse(null),
-                item -> FetchOutput.row(item, CAMEL)
-            );
-        }
+        return fetch(runContext, path, query, "emails", FetchType.STORE, item -> Rows.row(item, CAMEL));
     }
 }

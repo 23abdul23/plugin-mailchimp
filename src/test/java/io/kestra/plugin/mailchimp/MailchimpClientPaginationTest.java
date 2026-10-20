@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import org.hamcrest.Matchers;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import io.kestra.core.junit.annotations.KestraTest;
@@ -36,7 +38,10 @@ class MailchimpClientPaginationTest {
     private List<String> run(FakeMailchimpServer fake) throws Exception {
         var ids = new ArrayList<String>();
         try (var client = new MailchimpClient(runContextFactory.of(), fake.baseUrl(), "abc-us19", 0, Duration.ofSeconds(10), d -> { })) {
-            client.getPaged("/lists/a/members", null, 1000, items -> items.forEach(i -> ids.add(i.get("id").asText())), "members");
+            client.getPagedWhile("/lists/a/members", null, 1000, page -> {
+                page.path("members").forEach(i -> ids.add(i.get("id").asText()));
+                return true;
+            }, "members");
         }
         return ids;
     }
@@ -69,8 +74,8 @@ class MailchimpClientPaginationTest {
             assertThat(run(fake), hasSize(2500));
             var queries = fake.requests().stream().map(FakeMailchimpServer.Recorded::query).toList();
             assertThat(queries, hasSize(3));
-            assertThat(queries.get(0), containsString("count=1000"));
-            assertThat(queries.get(0), containsString("offset=0"));
+            assertThat(queries.getFirst(), containsString("count=1000"));
+            assertThat(queries.getFirst(), containsString("offset=0"));
             assertThat(queries.get(1), containsString("offset=1000"));
             assertThat(queries.get(2), containsString("offset=2000"));
         }
@@ -94,7 +99,7 @@ class MailchimpClientPaginationTest {
             var ids = run(fake);
 
             assertThat(ids, hasSize(2000));
-            assertThat(ids.stream().distinct().count(), org.hamcrest.Matchers.equalTo(2000L));
+            assertThat(ids.stream().distinct().count(), Matchers.equalTo(2000L));
             assertThat(fake.requests(), hasSize(2));
         }
     }
@@ -102,7 +107,7 @@ class MailchimpClientPaginationTest {
     @Test
     void nonPositivePageSizeRejected() throws Exception {
         try (var fake = new FakeMailchimpServer(); var client = new MailchimpClient(runContextFactory.of(), fake.baseUrl(), "abc-us19", 0, Duration.ofSeconds(10), d -> { })) {
-            org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class, () -> client.getPaged("/lists/a/members", null, 0, i -> { }, "members"));
+            Assertions.assertThrows(IllegalArgumentException.class, () -> client.getPagedWhile("/lists/a/members", null, 0, page -> true, "members"));
             assertThat(fake.requests(), empty());
         }
     }

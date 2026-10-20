@@ -17,7 +17,7 @@ import io.kestra.core.models.triggers.TriggerOutput;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTrigger;
 import io.kestra.plugin.mailchimp.MailchimpClient;
 import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
-import io.kestra.plugin.mailchimp.models.CursorPoll;
+import io.kestra.plugin.mailchimp.polling.CursorPoll;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -44,10 +44,7 @@ public abstract class AbstractMemberTrigger extends AbstractMailchimpTrigger imp
     @PluginProperty(group = "main")
     private Property<String> listId;
 
-    /**
-     * @param query     fixed member filters (status)
-     * @param timeField {@code timestamp_opt} or {@code last_changed}
-     */
+    /** {@code query}: fixed member filters (status); {@code timeField}: {@code timestamp_opt} or {@code last_changed}. */
     protected Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context, String kind,
                                            Map<String, String> query, String timeField, Predicate<JsonNode> filter) throws Exception {
         var rListId = MailchimpConnectionInterface.required(conditionContext.getRunContext(), listId, "listId");
@@ -61,7 +58,6 @@ public abstract class AbstractMemberTrigger extends AbstractMailchimpTrigger imp
                     .listId(rListId)
                     .count(r.count())
                     .uri(r.uri())
-                    .cursor(r.cursor().format())
                     .build();
             });
     }
@@ -89,12 +85,5 @@ public abstract class AbstractMemberTrigger extends AbstractMailchimpTrigger imp
                 ION file in internal storage, one row per member, same fields as `ListMembers`, oldest first."""
         )
         private final URI uri;
-
-        @Schema(
-            title = "Cursor",
-            description = """
-                The trigger position after this poll (newest timestamp and the member ids seen at it), as stored in the KV store."""
-        )
-        private final String cursor;
     }
 }

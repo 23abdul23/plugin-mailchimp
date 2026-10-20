@@ -1,5 +1,7 @@
 package io.kestra.plugin.mailchimp;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -18,7 +20,7 @@ public class MailchimpException extends RuntimeException {
         this.status = status;
         this.title = title;
         this.detail = detail;
-        this.fieldErrors = fieldErrors == null ? Map.of() : fieldErrors;
+        this.fieldErrors = fieldErrors == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(fieldErrors));
     }
 
     static String message(int status, String title, String detail, Map<String, String> fieldErrors) {

@@ -68,12 +68,12 @@ class CampaignSentTriggerTest {
             assertThat(((Number) vars.get("count")).intValue(), is(2));
             assertThat(ids(ctx, execution), contains("c2", "c3"));
             assertThat(vars, hasEntry("campaignId", "c3"));
-            assertThat(vars, hasEntry("sendTime", "2026-01-01T10:00:20+00:00"));
+            assertThat(vars, hasEntry("sendTime", "2026-01-01T10:00:20Z"));
             assertThat(vars, hasEntry("title", "B"));
             assertThat(vars, not(hasKey("report")));
             assertThat(trigger.evaluate(ctx.getKey(), ctx.getValue()).isPresent(), is(false));
 
-            assertThat(fake.requests().get(0).query(), equalTo("status=sent&list_id=L1&sort_field=send_time&sort_dir=DESC&count=1000&offset=0"));
+            assertThat(fake.requests().getFirst().query(), equalTo("status=sent&list_id=L1&sort_field=send_time&sort_dir=DESC&count=1000&offset=0&fields=campaigns.id%2Ccampaigns.send_time"));
             assertThat(fake.requests().get(1).query(), equalTo(
                 "status=sent&list_id=L1&since_send_time=2026-01-01T10%3A00%3A04%2B00%3A00"
                     + "&sort_field=send_time&sort_dir=ASC&count=1000&offset=0"));

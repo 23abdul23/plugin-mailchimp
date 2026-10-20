@@ -11,7 +11,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import org.apache.hc.core5.http.ContentType;
@@ -32,18 +31,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.JacksonMapper;
 
-
-
-/**
- * Thin Mailchimp Marketing API client on Kestra's own {@link HttpClient} (platform proxy, TLS and, from Kestra 2.0, the
- * HTTP allow/deny list): bearer auth, no redirect following, retry with exponential backoff and error mapping to
- * {@link MailchimpException}.
- *
- * <p>Kestra's client sits on Apache HttpClient, whose built-in retry cannot be configured from here: it replays a
- * request once, immediately, after a 429 or 503 when the request body can be re-read (verified against core 1.3.39). For
- * a POST that would risk a duplicate send, so POST bodies are one-shot streams (see {@link #request}); GET and PUT may be
- * replayed, they are idempotent. Our own retry rules below sit on top of that.
- */
+/** Mailchimp Marketing API client on Kestra's HttpClient: bearer auth, no redirects, backoff retries, errors as {@link MailchimpException}. POST bodies are one-shot streams because Apache would otherwise replay them once after a 429/503. */
 public class MailchimpClient implements Closeable {
     /** Injected so tests do not actually sleep. */
     @FunctionalInterface
@@ -51,8 +39,8 @@ public class MailchimpClient implements Closeable {
         void sleep(Duration duration) throws InterruptedException;
     }
 
-    static final Duration BASE_DELAY = Duration.ofSeconds(1);
-    static final Duration MAX_DELAY = Duration.ofSeconds(30);
+    private static final Duration BASE_DELAY = Duration.ofSeconds(1);
+    private static final Duration MAX_DELAY = Duration.ofSeconds(30);
     private static final Set<String> IDEMPOTENT = Set.of("GET", "PUT");
 
     private final HttpClient http;
@@ -90,7 +78,7 @@ public class MailchimpClient implements Closeable {
         var retryable = IDEMPOTENT.contains(method.toUpperCase());
         var json = body != null ? JacksonMapper.ofJson().writeValueAsString(body) : retryable ? null : "{}";
 
-        for (int attempt = 0; ; attempt++) {
+        for (var attempt = 0; ; attempt++) {
             HttpResponse<String> response;
             try {
                 response = http.request(request(method, uri, json, retryable), String.class);
@@ -140,11 +128,7 @@ public class MailchimpClient implements Closeable {
         return response;
     }
 
-    /**
-     * Built again for every attempt. A POST gets a one-shot stream entity: Apache only replays a request whose entity
-     * can be re-read, so this switches its built-in replay (once, after a 429/503) off and a send or batch POST is
-     * never repeated behind our back. A POST without payload sends {@code {}} so that it has an entity too.
-     */
+    /** Built again for every attempt; a POST gets a one-shot entity (never replayed by Apache) and sends {@code {}} when it has no payload. */
     private static HttpRequest request(String method, URI uri, String json, boolean replayable) {
         var builder = HttpRequest.builder().method(method).uri(uri).addHeader("Accept", "application/json");
         if (json != null) {
@@ -173,29 +157,12 @@ public class MailchimpClient implements Closeable {
         return false;
     }
 
-    /**
-     * Calls {@code GET path} page by page ({@code count}/{@code offset}) and hands each page's {@code arrayField}
-     * array to {@code pageHandler}. Stops on a short page or once {@code total_items} items were read.
-     */
-    public void getPaged(String path, Map<String, String> query, int pageSize, Consumer<JsonNode> pageHandler, String arrayField) throws Exception {
-        getPagedWhile(path, query, pageSize, page -> {
-            var items = page.path(arrayField);
-            if (items.isArray() && !items.isEmpty()) {
-                pageHandler.accept(items);
-            }
-            return true;
-        }, arrayField);
-    }
-
-    /**
-     * Like {@link #getPaged} but hands the whole page (so callers can read {@code total_items}) to {@code pageHandler},
-     * including an empty one, and stops as soon as it returns {@code false} so no further page is requested.
-     */
+    /** Calls {@code GET path} page by page and hands each whole page (even an empty one) to {@code pageHandler}; stops when it returns {@code false}, on a short page, or once {@code total_items} were read. */
     public void getPagedWhile(String path, Map<String, String> query, int pageSize, Predicate<JsonNode> pageHandler, String arrayField) throws Exception {
         if (pageSize <= 0) {
             throw new IllegalArgumentException("'pageSize' must be > 0");
         }
-        long fetched = 0;
+        var fetched = 0L;
         for (long offset = 0; ; offset += pageSize) {
             var q = new LinkedHashMap<String, String>(query == null ? Map.of() : query);
             q.put("count", String.valueOf(pageSize));
@@ -248,7 +215,7 @@ public class MailchimpClient implements Closeable {
     }
 
     /** Exponential backoff (1 s, factor 2, cap 30 s) with jitter in [50%, 100%]; Retry-After wins when present. */
-    static Duration delay(int attempt, String retryAfter) {
+    private static Duration delay(int attempt, String retryAfter) {
         if (retryAfter != null) {
             try {
                 return min(Duration.ofSeconds(Math.max(0, Long.parseLong(retryAfter.trim()))), MAX_DELAY);

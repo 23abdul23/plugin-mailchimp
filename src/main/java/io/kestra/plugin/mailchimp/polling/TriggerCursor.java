@@ -1,7 +1,8 @@
-package io.kestra.plugin.mailchimp.models;
+package io.kestra.plugin.mailchimp.polling;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.SortedSet;
@@ -12,17 +13,13 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 
 import io.kestra.core.serializers.JacksonMapper;
 
-/**
- * Position of a polling trigger: the newest timestamp seen plus the ids of every item seen at exactly that
- * timestamp. Items sharing a timestamp across two polls are then neither skipped nor fired twice, whether the
- * Mailchimp {@code since_*} filter is inclusive or exclusive.
- */
+/** Newest timestamp seen plus the ids seen at exactly that timestamp, so ties across two polls are neither skipped nor fired twice. */
 public record TriggerCursor(Instant timestamp, @JsonProperty("ids") SortedSet<String> idsAtTimestamp) {
     public record Item(Instant timestamp, String id) {
     }
 
     public TriggerCursor {
-        idsAtTimestamp = new TreeSet<>(idsAtTimestamp);
+        idsAtTimestamp = Collections.unmodifiableSortedSet(new TreeSet<>(idsAtTimestamp));
     }
 
     public boolean isNew(Instant ts, String id) {

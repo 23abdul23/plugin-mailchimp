@@ -16,11 +16,12 @@ import java.util.stream.Collectors;
 
 import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
+import io.kestra.core.models.triggers.PollingTriggerInterface;
 import io.kestra.core.models.triggers.Trigger;
 import io.kestra.core.storages.kv.KVValue;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Recorded;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
-import io.kestra.plugin.mailchimp.models.TriggerCursor;
+import io.kestra.plugin.mailchimp.polling.TriggerCursor;
 
 /** Shared helpers of the polling trigger tests. */
 public final class TriggerSupport {
@@ -54,7 +55,7 @@ public final class TriggerSupport {
 
     public static List<String> ids(Map.Entry<ConditionContext, Trigger> ctx, Execution execution) throws Exception {
         var rows = ReadTaskSupport.readIon(ctx.getKey().getRunContext(), URI.create(String.valueOf(vars(execution).get("uri"))));
-        return rows.stream().map(r -> String.valueOf(r.get("id"))).collect(Collectors.toList());
+        return rows.stream().map(r -> String.valueOf(r.get("id"))).toList();
     }
 
     /** A record of the simulated Mailchimp list; mutable so a test can move it while the trigger pages. */
@@ -70,10 +71,7 @@ public final class TriggerSupport {
         }
     }
 
-    /**
-     * Simulates a Mailchimp list endpoint over {@code rows}: {@code since_<timeField>} inclusive, {@code status}
-     * filter, stable sort on {@code timeField} by {@code sort_dir}, then {@code offset}/{@code count}.
-     */
+    /** Simulates a Mailchimp list endpoint over {@code rows}: inclusive {@code since_<timeField>}, status filter, sort, then offset/count. */
     public static Function<Recorded, Response> listServer(String arrayField, String timeField, List<Row> rows) {
         return request -> {
             var q = new HashMap<String, String>();
@@ -99,7 +97,7 @@ public final class TriggerSupport {
     }
 
     /** Polls until a poll fires nothing (at most {@code maxPolls}) and returns every fired id, in firing order. */
-    public static List<String> drain(io.kestra.core.models.triggers.PollingTriggerInterface trigger, Map.Entry<ConditionContext, Trigger> ctx, int maxPolls) throws Exception {
+    public static List<String> drain(PollingTriggerInterface trigger, Map.Entry<ConditionContext, Trigger> ctx, int maxPolls) throws Exception {
         var fired = new ArrayList<String>();
         for (int i = 0; i < maxPolls; i++) {
             var execution = trigger.evaluate(ctx.getKey(), ctx.getValue());

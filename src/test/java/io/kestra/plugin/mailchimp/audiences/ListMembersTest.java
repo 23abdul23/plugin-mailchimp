@@ -2,6 +2,8 @@ package io.kestra.plugin.mailchimp.audiences;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -9,8 +11,10 @@ import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
+import io.kestra.plugin.mailchimp.MailchimpException;
 import io.kestra.plugin.mailchimp.ReadTaskSupport;
 import io.kestra.plugin.mailchimp.models.SortDir;
 
@@ -45,6 +49,8 @@ class ListMembersTest {
 
     private ListMembers.ListMembersBuilder<?, ?> task(FakeMailchimpServer fake) {
         return ListMembers.builder()
+            .id(IdUtils.create())
+            .type(ListMembers.class.getName())
             .apiKey(Property.ofValue("abc-us19"))
             .baseUrl(Property.ofValue(fake.baseUrl()))
             .listId(Property.ofValue("L1"))
@@ -56,7 +62,7 @@ class ListMembersTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("GET", PATH, Response.json(200, ReadTaskSupport.page("members", 0, 3, 3)));
 
-            var out = ListMembers.builder().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
+            var out = ListMembers.builder().id(IdUtils.create()).type(ListMembers.class.getName()).apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
                 .listId(Property.ofValue("L1")).build().run(runContextFactory.of());
 
             assertThat(out.getRows(), nullValue());
@@ -82,9 +88,9 @@ class ListMembersTest {
             assertThat(row, hasEntry("language", "en"));
             assertThat(row, hasEntry("vip", true));
             assertThat(row, hasEntry("ip_signup", "1.2.3.4"));
-            assertThat(row.get("tags"), equalTo(List.of(java.util.Map.of("id", 1, "name", "vip"))));
+            assertThat(row.get("tags"), equalTo(List.of(Map.of("id", 1, "name", "vip"))));
             // nested merge field keys are left untouched
-            assertThat(row.get("mergeFields"), equalTo(java.util.Map.of("FNAME", "Ann", "LNAME", "Lee")));
+            assertThat(row.get("mergeFields"), equalTo(Map.of("FNAME", "Ann", "LNAME", "Lee")));
             assertThat(out.getTotal(), is(2L));
             assertThat(fake.requests().getFirst().query(), equalTo("count=1000&offset=0"));
         }
@@ -150,7 +156,7 @@ class ListMembersTest {
             task(fake)
                 .status(Property.ofValue(ListMembers.Status.UNSUBSCRIBED))
                 .sinceLastChanged(Property.ofValue(Instant.parse("2024-01-01T00:00:00Z")))
-                .sinceTimestampOpt(Property.ofValue(Instant.parse("2024-03-04T05:06:07Z")))
+                .optedInSince(Property.ofValue(Instant.parse("2024-03-04T05:06:07Z")))
                 .sortField(Property.ofValue(ListMembers.SortField.TIMESTAMP_OPT))
                 .sortDir(Property.ofValue(SortDir.DESC))
                 .fields(Property.ofValue(List.of("members.id", "total_items")))
@@ -249,8 +255,8 @@ class ListMembersTest {
 
     @Test
     void enumsAreLowercasedIndependentlyOfTheDefaultLocale() throws Exception {
-        var previous = java.util.Locale.getDefault();
-        java.util.Locale.setDefault(java.util.Locale.forLanguageTag("tr-TR"));
+        var previous = Locale.getDefault();
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"));
         try (var fake = new FakeMailchimpServer()) {
             fake.on("GET", PATH, Response.json(200, BODY));
 
@@ -260,7 +266,7 @@ class ListMembersTest {
 
             assertThat(fake.requests().getFirst().query(), equalTo("status=unsubscribed&sort_field=timestamp_opt&count=1000&offset=0"));
         } finally {
-            java.util.Locale.setDefault(previous);
+            Locale.setDefault(previous);
         }
     }
 
@@ -284,7 +290,7 @@ class ListMembersTest {
                 Response.json(200, ReadTaskSupport.page("members", 0, 1000, 3000)),
                 Response.json(403, "{\"title\":\"Forbidden\",\"detail\":\"plan limit\"}"));
 
-            var e = assertThrows(io.kestra.plugin.mailchimp.MailchimpException.class,
+            var e = assertThrows(MailchimpException.class,
                 () -> task(fake).fetchType(Property.ofValue(FetchType.STORE)).maxRetries(Property.ofValue(0)).build().run(runContextFactory.of()));
 
             assertThat(e.getMessage(), containsString("403"));

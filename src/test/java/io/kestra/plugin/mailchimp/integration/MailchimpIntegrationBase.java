@@ -18,15 +18,7 @@ import io.kestra.plugin.mailchimp.models.SubscriberHash;
 
 import jakarta.inject.Inject;
 
-/**
- * Base of the optional integration tests. Subclasses must carry
- * {@code @EnabledIfEnvironmentVariable(named = "MAILCHIMP_API_KEY", matches = ".+")} (and {@code MAILCHIMP_LIST_ID}
- * when they write to an audience) so that they report as skipped without credentials.
- *
- * <p>Rules: only the audience {@code MAILCHIMP_LIST_ID} is written to, members are
- * {@code kestra-it-<uuid>@<test domain>}, always written with status {@code unsubscribed}, every created member is archived in {@link #cleanup()}, and the API key is
- * never logged.
- */
+/** Base of the optional integration tests: skipped without credentials, writes only {@code kestra-it-<uuid>} members as unsubscribed, archives them in {@link #cleanup()}. */
 @KestraTest
 abstract class MailchimpIntegrationBase {
     @Inject

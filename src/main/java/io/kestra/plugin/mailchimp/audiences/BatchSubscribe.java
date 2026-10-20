@@ -1,13 +1,12 @@
 package io.kestra.plugin.mailchimp.audiences;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import io.kestra.core.models.annotations.Example;
@@ -20,10 +19,12 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
+import io.kestra.plugin.mailchimp.models.MemberStatus;
 import io.kestra.plugin.mailchimp.models.SubscriberHash;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -102,8 +103,7 @@ public class BatchSubscribe extends AbstractMailchimpTask implements RunnableTas
     private static final int MAX_CHUNK = 500;
     private static final int LISTED_ERRORS = 10;
     /** Rejected members kept in the output; {@code errorCount} still holds the real total. */
-    static final int MAX_ERRORS = 1000;
-    private static final Set<String> STATUSES = Set.of("subscribed", "unsubscribed", "cleaned", "pending", "transactional");
+    private static final int MAX_ERRORS = 1000;
 
     @Schema(
         title = "Audience ID",
@@ -202,72 +202,78 @@ public class BatchSubscribe extends AbstractMailchimpTask implements RunnableTas
         });
         var chunks = (int) ((rows[0] + rChunk - 1) / rChunk);
 
-        var errors = new ArrayList<Output.MemberError>();
-        var totals = new long[3]; // created, updated, errorCount
-        var batch = new ArrayList<Map<String, Object>>(Math.min(rChunk, 500));
-        var sent = new int[1];
-
+        var totals = new Totals();
         if (chunks > 0) {
             try (var client = client(runContext)) {
-                Consumer<List<Map<String, Object>>> flush = members -> {
-                    var body = new LinkedHashMap<String, Object>();
-                    body.put("members", new ArrayList<>(members));
-                    body.putAll(flags);
-                    try {
-                        var response = client.sendForBody("POST", "/lists/" + MailchimpClient.segment(rListId), null, body);
-                        for (var field : List.of("total_created", "total_updated", "error_count")) {
-                            if (!response.path(field).canConvertToLong()) {
-                                // a renamed field must not silently count as 0 members
-                                throw new IllegalStateException("Unexpected Mailchimp response: '" + field + "' is missing or not a number");
-                            }
-                        }
-                        totals[0] += response.path("total_created").asLong(0);
-                        totals[1] += response.path("total_updated").asLong(0);
-                        totals[2] += response.path("error_count").asLong(0);
-                        for (var err : response.path("errors")) {
-                            if (errors.size() >= MAX_ERRORS) {
-                                break;
-                            }
-                            errors.add(new Output.MemberError(err.path("email_address").asText(null), err.path("error").asText(null), err.path("error_code").asText(null)));
-                        }
-                        sent[0]++;
-                    } catch (Exception e) {
-                        if (e instanceof InterruptedException) {
-                            Thread.currentThread().interrupt();
-                        }
-                        throw new IllegalStateException("Batch subscribe failed on chunk " + (sent[0] + 1) + " of " + chunks + ": " + e.getMessage()
-                            + ". " + sent[0] + " of " + chunks + " chunk(s) succeeded before this failure (rows 1-" + ((long) sent[0] * rChunk)
-                            + " were sent); the failed request is not retried, resume from row " + ((long) sent[0] * rChunk + 1)
-                            + ". So far: " + totals[0] + " created, " + totals[1] + " updated, " + totals[2] + " rejected"
-                            + (totals[2] > 0 ? ": " + describe(errors, totals[2]) : ""), e);
-                    }
-                    members.clear();
-                };
-
+                var batch = new ArrayList<Map<String, Object>>();
                 forEachRow(runContext, data, (n, raw) -> {
                     batch.add(toMember(n, raw));
                     if (batch.size() >= rChunk) {
-                        flush.accept(batch);
+                        sendChunk(client, rListId, batch, flags, totals, chunks, rChunk);
+                        batch.clear();
                     }
                 });
                 if (!batch.isEmpty()) {
-                    flush.accept(batch);
+                    sendChunk(client, rListId, batch, flags, totals, chunks, rChunk);
                 }
             }
         }
 
-        if (rFailOnError && totals[2] > 0) {
-            throw new IllegalStateException(totals[2] + " member(s) were rejected by Mailchimp (" + totals[0] + " created, " + totals[1] + " updated): "
-                + describe(errors, totals[2]) + ". Set 'failOnError: false' to get them in the 'errors' output.");
+        if (rFailOnError && totals.rejected > 0) {
+            throw new IllegalStateException(totals.rejected + " member(s) were rejected by Mailchimp (" + totals.created + " created, " + totals.updated + " updated): "
+                + describe(totals.errors, totals.rejected) + ". Set 'failOnError: false' to get them in the 'errors' output.");
         }
 
         return Output.builder()
-            .totalCreated(totals[0])
-            .totalUpdated(totals[1])
-            .errorCount(totals[2])
-            .errors(errors)
-            .batches(sent[0])
+            .totalCreated(totals.created)
+            .totalUpdated(totals.updated)
+            .errorCount(totals.rejected)
+            .errors(List.copyOf(totals.errors))
+            .batches(totals.sent)
             .build();
+    }
+
+    private static final class Totals {
+        long created;
+        long updated;
+        long rejected;
+        int sent;
+        final List<Output.MemberError> errors = new ArrayList<>();
+    }
+
+    private static void sendChunk(MailchimpClient client, String rListId, List<Map<String, Object>> members, Map<String, Object> flags,
+                                  Totals totals, int chunks, int rChunk) {
+        var body = new LinkedHashMap<String, Object>();
+        body.put("members", List.copyOf(members));
+        body.putAll(flags);
+        try {
+            var response = client.sendForBody("POST", "/lists/" + MailchimpClient.segment(rListId), null, body);
+            for (var field : List.of("total_created", "total_updated", "error_count")) {
+                if (!response.path(field).canConvertToLong()) {
+                    // a renamed field must not silently count as 0 members
+                    throw new IllegalStateException("Unexpected Mailchimp response: '" + field + "' is missing or not a number");
+                }
+            }
+            totals.created += response.path("total_created").asLong();
+            totals.updated += response.path("total_updated").asLong();
+            totals.rejected += response.path("error_count").asLong();
+            for (var err : response.path("errors")) {
+                if (totals.errors.size() >= MAX_ERRORS) {
+                    break;
+                }
+                totals.errors.add(new Output.MemberError(err.path("email_address").asText(null), err.path("error").asText(null), err.path("error_code").asText(null)));
+            }
+            totals.sent++;
+        } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
+            throw new IllegalStateException("Batch subscribe failed on chunk " + (totals.sent + 1) + " of " + chunks + ": " + e.getMessage()
+                + ". " + totals.sent + " of " + chunks + " chunk(s) succeeded before this failure (rows 1-" + ((long) totals.sent * rChunk)
+                + " were sent); the failed request is not retried, resume from row " + ((long) totals.sent * rChunk + 1)
+                + ". So far: " + totals.created + " created, " + totals.updated + " updated, " + totals.rejected + " rejected"
+                + (totals.rejected > 0 ? ": " + describe(totals.errors, totals.rejected) : ""), e);
+        }
     }
 
     private static String describe(List<Output.MemberError> errors, long errorCount) {
@@ -296,8 +302,9 @@ public class BatchSubscribe extends AbstractMailchimpTask implements RunnableTas
             throw new IllegalArgumentException("Invalid input at row " + n + ": " + e.getMessage());
         }
         var status = raw.get("status") == null ? "" : raw.get("status").toString().trim().toLowerCase(Locale.ROOT);
-        if (!STATUSES.contains(status)) {
-            throw new IllegalArgumentException("Invalid input at row " + n + ": 'status' must be one of " + STATUSES.stream().sorted().toList() + " but was '" + raw.get("status") + "'");
+        if (Arrays.stream(MemberStatus.values()).noneMatch(v -> v.name().toLowerCase(Locale.ROOT).equals(status))) {
+            throw new IllegalArgumentException("Invalid input at row " + n + ": 'status' must be one of "
+                + Arrays.stream(MemberStatus.values()).map(v -> v.name().toLowerCase(Locale.ROOT)).sorted().toList() + " but was '" + raw.get("status") + "'");
         }
         var member = new LinkedHashMap<String, Object>();
         member.put("email_address", email);
@@ -350,7 +357,7 @@ public class BatchSubscribe extends AbstractMailchimpTask implements RunnableTas
         private final int batches;
 
         @Getter
-        @lombok.AllArgsConstructor
+        @AllArgsConstructor
         public static class MemberError {
             @Schema(
                 title = "Email address",

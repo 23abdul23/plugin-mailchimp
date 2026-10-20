@@ -1,7 +1,6 @@
 package io.kestra.plugin.mailchimp.integration;
 
 import java.io.BufferedOutputStream;
-import java.net.URI;
 import java.nio.file.Files;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -16,6 +15,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.serializers.FileSerde;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.mailchimp.MailchimpClient;
 import io.kestra.plugin.mailchimp.account.Ping;
@@ -26,6 +26,7 @@ import io.kestra.plugin.mailchimp.audiences.NewSubscriberTrigger;
 import io.kestra.plugin.mailchimp.audiences.UpdateMemberTags;
 import io.kestra.plugin.mailchimp.audiences.UpsertMember;
 import io.kestra.plugin.mailchimp.campaigns.ListCampaigns;
+import io.kestra.plugin.mailchimp.models.MemberStatus;
 import io.kestra.plugin.mailchimp.models.SubscriberHash;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -41,7 +42,7 @@ class CoreIntegrationTest extends MailchimpIntegrationBase {
     private static final String MAILCHIMP_TIME = "[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}[+-][0-9]{2}:[0-9]{2}";
 
     private List<Map<String, Object>> listMembers(Instant since) throws Exception {
-        return ListMembers.builder().apiKey(apiKeyProperty()).server(serverProperty())
+        return ListMembers.builder().id(IdUtils.create()).type(ListMembers.class.getName()).apiKey(apiKeyProperty()).server(serverProperty())
             .listId(Property.ofValue(listId())).sinceLastChanged(Property.ofValue(since))
             .fetchType(Property.ofValue(FetchType.FETCH))
             .build().run(runContextFactory.of()).getRows();
@@ -49,21 +50,21 @@ class CoreIntegrationTest extends MailchimpIntegrationBase {
 
     @Test
     void ping() throws Exception {
-        var out = Ping.builder().apiKey(apiKeyProperty()).server(serverProperty()).build().run(runContextFactory.of());
+        var out = Ping.builder().id(IdUtils.create()).type(Ping.class.getName()).apiKey(apiKeyProperty()).server(serverProperty()).build().run(runContextFactory.of());
 
         assertThat(out.getHealthStatus(), containsString("Chimpy"));
     }
 
     @Test
     void pingDerivesServerFromKeySuffix() throws Exception {
-        var out = Ping.builder().apiKey(apiKeyProperty()).build().run(runContextFactory.of());
+        var out = Ping.builder().id(IdUtils.create()).type(Ping.class.getName()).apiKey(apiKeyProperty()).build().run(runContextFactory.of());
 
         assertThat(out.getHealthStatus(), containsString("Chimpy"));
     }
 
     @Test
     void listAudiencesContainsSandboxList() throws Exception {
-        var out = ListAudiences.builder().apiKey(apiKeyProperty()).server(serverProperty()).build().run(runContextFactory.of());
+        var out = ListAudiences.builder().id(IdUtils.create()).type(ListAudiences.class.getName()).apiKey(apiKeyProperty()).server(serverProperty()).build().run(runContextFactory.of());
 
         // maxItems unset: every page is fetched, so the sandbox list is found wherever it sits
         assertThat(out.getRows().stream().anyMatch(r -> listId().equals(r.get("id"))), is(true));
@@ -71,7 +72,7 @@ class CoreIntegrationTest extends MailchimpIntegrationBase {
 
     @Test
     void listCampaigns() throws Exception {
-        var out = ListCampaigns.builder().apiKey(apiKeyProperty()).server(serverProperty())
+        var out = ListCampaigns.builder().id(IdUtils.create()).type(ListCampaigns.class.getName()).apiKey(apiKeyProperty()).server(serverProperty())
             .maxItems(Property.ofValue(5)).build().run(runContextFactory.of());
 
         assertThat(out.getRows(), notNullValue());
@@ -85,9 +86,9 @@ class CoreIntegrationTest extends MailchimpIntegrationBase {
         var tag = "kestra-it-" + UUID.randomUUID().toString().substring(0, 8);
         var since = Instant.now().minus(1, ChronoUnit.HOURS);
 
-        var upserted = UpsertMember.builder().apiKey(apiKeyProperty()).server(serverProperty())
+        var upserted = UpsertMember.builder().id(IdUtils.create()).type(UpsertMember.class.getName()).apiKey(apiKeyProperty()).server(serverProperty())
             .listId(Property.ofValue(listId())).email(Property.ofValue(email))
-            .statusIfNew(Property.ofValue(UpsertMember.Status.UNSUBSCRIBED))
+            .statusIfNew(Property.ofValue(MemberStatus.UNSUBSCRIBED))
             .build().run(runContextFactory.of());
         assertThat(upserted.getEmailAddress(), equalTo(email));
 
@@ -98,11 +99,10 @@ class CoreIntegrationTest extends MailchimpIntegrationBase {
         assertThat(String.valueOf(row.get("timestampOpt")), matchesPattern(MAILCHIMP_TIME));
         assertThat(row.get("status"), equalTo("unsubscribed"));
 
-        var tagged = UpdateMemberTags.builder().apiKey(apiKeyProperty()).server(serverProperty())
+        UpdateMemberTags.builder().id(IdUtils.create()).type(UpdateMemberTags.class.getName()).apiKey(apiKeyProperty()).server(serverProperty())
             .listId(Property.ofValue(listId())).email(Property.ofValue(email))
-            .tags(Property.ofValue(List.of(UpdateMemberTags.Tag.builder().name(tag).status("active").build())))
+            .tags(Property.ofValue(List.of(UpdateMemberTags.Tag.builder().name(tag).status(UpdateMemberTags.TagStatus.ACTIVE).build())))
             .build().run(runContextFactory.of());
-        assertThat(tagged.getApplied().size(), is(1));
 
         eventually("tag visible on member", () -> {
             try (var client = client()) {
@@ -125,9 +125,9 @@ class CoreIntegrationTest extends MailchimpIntegrationBase {
                 FileSerde.write(out, Map.of("emailAddress", e, "status", "unsubscribed"));
             }
         }
-        URI uri = runContext.storage().putFile(file.toFile());
+        var uri = runContext.storage().putFile(file.toFile());
 
-        var out = BatchSubscribe.builder().apiKey(apiKeyProperty()).server(serverProperty())
+        var out = BatchSubscribe.builder().id(IdUtils.create()).type(BatchSubscribe.class.getName()).apiKey(apiKeyProperty()).server(serverProperty())
             .listId(Property.ofValue(listId())).from(uri.toString())
             .build().run(runContext);
 

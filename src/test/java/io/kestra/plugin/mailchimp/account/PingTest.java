@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 
@@ -23,6 +24,8 @@ class PingTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("GET", "/3.0/ping", Response.json(200, "{\"health_status\":\"Everything's Chimpy!\"}"));
             var task = Ping.builder()
+                .id(IdUtils.create())
+                .type(Ping.class.getName())
                 .apiKey(Property.ofValue("abc-us19"))
                 .baseUrl(Property.ofValue(fake.baseUrl()))
                 .build();

@@ -4,7 +4,6 @@ import java.time.Duration;
 import java.util.Optional;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.google.common.annotations.VisibleForTesting;
 
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.conditions.ConditionContext;
@@ -15,7 +14,7 @@ import io.kestra.core.models.triggers.AbstractTrigger;
 import io.kestra.core.models.triggers.TriggerContext;
 import io.kestra.core.models.triggers.TriggerService;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.mailchimp.models.CursorPoll;
+import io.kestra.plugin.mailchimp.polling.CursorPoll;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.AssertTrue;
@@ -127,7 +126,6 @@ public abstract class AbstractMailchimpTrigger extends AbstractTrigger implement
         }
     }
 
-    @VisibleForTesting
     protected MailchimpClient client(RunContext runContext) throws Exception {
         return MailchimpConnectionInterface.client(runContext, this);
     }

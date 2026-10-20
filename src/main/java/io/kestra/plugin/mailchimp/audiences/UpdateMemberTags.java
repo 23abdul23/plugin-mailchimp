@@ -3,13 +3,14 @@ package io.kestra.plugin.mailchimp.audiences;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
+import java.util.Map;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.VoidOutput;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
@@ -34,7 +35,7 @@ import lombok.experimental.SuperBuilder;
 @Schema(
     title = "Add or remove tags on a Mailchimp member",
     description = """
-        Changes the tags of one member with `POST /lists/{listId}/members/{subscriberHash}/tags`. Each tag is set `active` (added) or `inactive` (removed). Mailchimp answers 204 without a body, so `applied` echoes what was sent.
+        Changes the tags of one member with `POST /lists/{listId}/members/{subscriberHash}/tags`. Each tag is set `ACTIVE` (added) or `INACTIVE` (removed). Mailchimp answers 204 without a body.
 
         Only add contacts who have opted in; you are responsible for GDPR and Mailchimp terms."""
 )
@@ -55,15 +56,15 @@ import lombok.experimental.SuperBuilder;
                     email: "jane.doe@example.com"
                     tags:
                       - name: customer
-                        status: active
+                        status: ACTIVE
                       - name: lead
-                        status: inactive
+                        status: INACTIVE
                 """
         )
     }
 )
-public class UpdateMemberTags extends AbstractMailchimpTask implements RunnableTask<UpdateMemberTags.Output> {
-    private static final Set<String> STATUSES = Set.of("active", "inactive");
+public class UpdateMemberTags extends AbstractMailchimpTask implements RunnableTask<VoidOutput> {
+    public enum TagStatus { ACTIVE, INACTIVE }
 
     @Schema(
         title = "Audience ID",
@@ -86,7 +87,7 @@ public class UpdateMemberTags extends AbstractMailchimpTask implements RunnableT
     @Schema(
         title = "Tags",
         description = """
-            Tag changes, at least one. Each has a `name` and a `status` of `active` or `inactive`."""
+            Tag changes, at least one. Each has a `name` and a `status` of `ACTIVE` or `INACTIVE`."""
     )
     @NotNull
     @PluginProperty(group = "main")
@@ -98,35 +99,34 @@ public class UpdateMemberTags extends AbstractMailchimpTask implements RunnableT
             When true, the member's tags become exactly the `active` ones (`is_syncing`). Not sent when unset."""
     )
     @PluginProperty(group = "advanced")
-    private Property<Boolean> isSyncing;
+    private Property<Boolean> syncTags;
 
     @Override
-    public Output run(RunContext runContext) throws Exception {
+    public VoidOutput run(RunContext runContext) throws Exception {
         var rListId = MailchimpConnectionInterface.required(runContext, listId, "listId");
         var hash = SubscriberHash.of(MailchimpConnectionInterface.required(runContext, email, "email"));
         var rTags = runContext.render(tags).asList(Tag.class);
         if (rTags.isEmpty()) {
             throw new IllegalArgumentException("'tags' must contain at least one tag");
         }
-        var applied = rTags.stream().map(t -> {
+        var changes = rTags.stream().map(t -> {
             if (t.getName() == null || t.getName().isBlank()) {
                 throw new IllegalArgumentException("Tag 'name' must not be blank");
             }
-            var s = t.getStatus() == null ? "" : t.getStatus().trim().toLowerCase(Locale.ROOT);
-            if (!STATUSES.contains(s)) {
-                throw new IllegalArgumentException("Tag '" + t.getName() + "' has invalid status '" + t.getStatus() + "': expected active or inactive");
+            if (t.getStatus() == null) {
+                throw new IllegalArgumentException("Tag '" + t.getName() + "' needs a 'status': ACTIVE or INACTIVE");
             }
-            return new Tag(t.getName(), s);
+            return Map.of("name", t.getName(), "status", t.getStatus().name().toLowerCase(Locale.ROOT));
         }).toList();
 
         var body = new LinkedHashMap<String, Object>();
-        body.put("tags", applied);
-        runContext.render(isSyncing).as(Boolean.class).ifPresent(v -> body.put("is_syncing", v));
+        body.put("tags", changes);
+        runContext.render(syncTags).as(Boolean.class).ifPresent(v -> body.put("is_syncing", v));
 
         try (var client = client(runContext)) {
             client.send("POST", "/lists/" + MailchimpClient.segment(rListId) + "/members/" + MailchimpClient.segment(hash) + "/tags", null, body);
         }
-        return Output.builder().applied(applied).build();
+        return null;
     }
 
     @Builder
@@ -144,19 +144,8 @@ public class UpdateMemberTags extends AbstractMailchimpTask implements RunnableT
         @Schema(
             title = "Tag status",
             description = """
-                `active` adds the tag, `inactive` removes it."""
+                `ACTIVE` adds the tag, `INACTIVE` removes it."""
         )
-        private String status;
-    }
-
-    @Builder
-    @Getter
-    public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(
-            title = "Applied tags",
-            description = """
-                Tag changes sent to Mailchimp, with normalized status."""
-        )
-        private final List<Tag> applied;
+        private TagStatus status;
     }
 }

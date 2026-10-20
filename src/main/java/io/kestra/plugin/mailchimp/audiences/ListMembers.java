@@ -13,18 +13,17 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
-import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
-import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
+import io.kestra.plugin.mailchimp.AbstractMailchimpFetchTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
 import io.kestra.plugin.mailchimp.models.FetchOutput;
+import io.kestra.plugin.mailchimp.models.Rows;
 import io.kestra.plugin.mailchimp.models.SortDir;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
-import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -64,7 +63,7 @@ import lombok.experimental.SuperBuilder;
         )
     }
 )
-public class ListMembers extends AbstractMailchimpTask implements RunnableTask<FetchOutput> {
+public class ListMembers extends AbstractMailchimpFetchTask {
     private static final Set<String> CAMEL = Set.of("email_address", "merge_fields", "timestamp_opt", "last_changed");
 
     public enum Status { SUBSCRIBED, UNSUBSCRIBED, CLEANED, PENDING, TRANSACTIONAL, ARCHIVED }
@@ -102,7 +101,7 @@ public class ListMembers extends AbstractMailchimpTask implements RunnableTask<F
             Only members who opted in after this ISO-8601 date and time (`since_timestamp_opt`)."""
     )
     @PluginProperty(group = "processing")
-    private Property<Instant> sinceTimestampOpt;
+    private Property<Instant> optedInSince;
 
     @Schema(
         title = "Sort field",
@@ -128,30 +127,9 @@ public class ListMembers extends AbstractMailchimpTask implements RunnableTask<F
     @PluginProperty(group = "processing")
     private Property<List<String>> fields;
 
-    @Schema(
-        title = "Fetch strategy",
-        description = """
-            `FETCH_ONE`: first member only.
-            `FETCH`: all members in memory.
-            `STORE` (default): write rows as ION to internal storage and return the URI.
-            `NONE`: only count them."""
-    )
-    @Builder.Default
-    @PluginProperty(group = "processing")
-    private Property<FetchType> fetchType = Property.ofValue(FetchType.STORE);
-
-    @Schema(
-        title = "Max items",
-        minimum = "1",
-        description = """
-            Stop after this many members (default: unlimited). Must be at least 1. Use it to bound a huge audience."""
-    )
-    @PluginProperty(group = "processing")
-    private Property<Integer> maxItems;
-
     /** Member JSON to row; shared with the member triggers. */
     static Map<String, Object> toRow(JsonNode item) {
-        return FetchOutput.row(item, CAMEL);
+        return Rows.row(item, CAMEL);
     }
 
     @Override
@@ -160,20 +138,13 @@ public class ListMembers extends AbstractMailchimpTask implements RunnableTask<F
         var path = "/lists/" + MailchimpClient.segment(rListId) + "/members";
 
         var query = new LinkedHashMap<String, String>();
-        FetchOutput.put(query, "status", runContext.render(status).as(Status.class));
-        FetchOutput.put(query, "since_last_changed", runContext.render(sinceLastChanged).as(Instant.class));
-        FetchOutput.put(query, "since_timestamp_opt", runContext.render(sinceTimestampOpt).as(Instant.class));
-        FetchOutput.put(query, "sort_field", runContext.render(sortField).as(SortField.class));
-        FetchOutput.put(query, "sort_dir", runContext.render(sortDir).as(SortDir.class));
-        FetchOutput.put(query, "fields", Optional.of(runContext.render(fields).asList(String.class)));
+        Rows.put(query, "status", runContext.render(status).as(Status.class));
+        Rows.put(query, "since_last_changed", runContext.render(sinceLastChanged).as(Instant.class));
+        Rows.put(query, "since_timestamp_opt", runContext.render(optedInSince).as(Instant.class));
+        Rows.put(query, "sort_field", runContext.render(sortField).as(SortField.class));
+        Rows.put(query, "sort_dir", runContext.render(sortDir).as(SortDir.class));
+        Rows.put(query, "fields", Optional.of(runContext.render(fields).asList(String.class)));
 
-        try (var client = client(runContext)) {
-            return FetchOutput.fetchPaged(
-                runContext, client, path, query, "members",
-                runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE),
-                runContext.render(maxItems).as(Integer.class).orElse(null),
-                ListMembers::toRow
-            );
-        }
+        return fetch(runContext, path, query, "members", FetchType.STORE, ListMembers::toRow);
     }
 }

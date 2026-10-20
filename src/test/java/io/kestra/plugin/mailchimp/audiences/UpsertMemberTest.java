@@ -11,9 +11,11 @@ import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.serializers.JacksonMapper;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 import io.kestra.plugin.mailchimp.MailchimpException;
+import io.kestra.plugin.mailchimp.models.MemberStatus;
 
 import jakarta.inject.Inject;
 
@@ -35,11 +37,13 @@ class UpsertMemberTest {
 
     private UpsertMember.UpsertMemberBuilder<?, ?> task(FakeMailchimpServer fake) {
         return UpsertMember.builder()
+            .id(IdUtils.create())
+            .type(UpsertMember.class.getName())
             .apiKey(Property.ofValue("abc-us19"))
             .baseUrl(Property.ofValue(fake.baseUrl()))
             .listId(Property.ofValue("L1"))
             .email(Property.ofValue(" Jane.Doe+news@Example.COM "))
-            .statusIfNew(Property.ofValue(UpsertMember.Status.SUBSCRIBED));
+            .statusIfNew(Property.ofValue(MemberStatus.SUBSCRIBED));
     }
 
     private static JsonNode json(String s) throws Exception {
@@ -52,7 +56,7 @@ class UpsertMemberTest {
             fake.on("PUT", PATH, Response.json(200, OK));
 
             var out = task(fake)
-                .status(Property.ofValue(UpsertMember.Status.PENDING))
+                .status(Property.ofValue(MemberStatus.PENDING))
                 .mergeFields(Property.ofValue(Map.of("FNAME", "Jane")))
                 .tags(Property.ofValue(List.of("a", "b")))
                 .language(Property.ofValue("fr"))

@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -25,7 +26,8 @@ import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 import io.kestra.plugin.mailchimp.MailchimpException;
 import io.kestra.plugin.mailchimp.TriggerSupport.Row;
-import io.kestra.plugin.mailchimp.models.TriggerCursor;
+import io.kestra.plugin.mailchimp.TriggerSupport;
+import io.kestra.plugin.mailchimp.polling.TriggerCursor;
 
 import jakarta.inject.Inject;
 import jakarta.validation.ConstraintViolationException;
@@ -56,7 +58,7 @@ class NewSubscriberTriggerTest {
     private ModelValidator modelValidator;
 
     private static String m(String id, String second) {
-        return io.kestra.plugin.mailchimp.TriggerSupport.member(id, "timestamp_opt", "2026-01-01T10:00:" + second + "+00:00");
+        return TriggerSupport.member(id, "timestamp_opt", "2026-01-01T10:00:" + second + "+00:00");
     }
 
     private static Instant at(String second) {
@@ -86,8 +88,8 @@ class NewSubscriberTriggerTest {
 
             assertThat(trigger.evaluate(ctx.getKey(), ctx.getValue()).isPresent(), is(false));
 
-            assertThat(cursor(ctx, KIND, "L1").orElseThrow(), equalTo(new TriggerCursor(at("05"), new java.util.TreeSet<>(List.of("m2")))));
-            assertThat(fake.requests().getFirst().query(), equalTo("status=subscribed&sort_field=timestamp_opt&sort_dir=DESC&count=1000&offset=0"));
+            assertThat(cursor(ctx, KIND, "L1").orElseThrow(), equalTo(new TriggerCursor(at("05"), new TreeSet<>(List.of("m2")))));
+            assertThat(fake.requests().getFirst().query(), equalTo("status=subscribed&sort_field=timestamp_opt&sort_dir=DESC&count=1000&offset=0&fields=members.id%2Cmembers.timestamp_opt"));
         }
     }
 
@@ -107,8 +109,8 @@ class NewSubscriberTriggerTest {
             assertThat(vars(execution).get("listId"), is("L1"));
             assertThat(ids(ctx, execution), contains("m2", "m3"));
             var stored = cursor(ctx, KIND, "L1").orElseThrow();
-            assertThat(stored, equalTo(new TriggerCursor(at("10"), new java.util.TreeSet<>(List.of("m2", "m3")))));
-            assertThat(vars(execution).get("cursor"), is(stored.format()));
+            assertThat(stored, equalTo(new TriggerCursor(at("10"), new TreeSet<>(List.of("m2", "m3")))));
+            assertThat(vars(execution).containsKey("cursor"), is(false));
 
             // third poll, nothing changed
             assertThat(trigger.evaluate(ctx.getKey(), ctx.getValue()).isPresent(), is(false));
@@ -157,7 +159,7 @@ class NewSubscriberTriggerTest {
             fake.on("GET", PATH, Response.json(200, page("members")));
 
             assertThat(trigger.evaluate(ctx.getKey(), ctx.getValue()).isPresent(), is(false));
-            assertThat(cursor(ctx, KIND, "L1").orElseThrow(), equalTo(new TriggerCursor(Instant.EPOCH, new java.util.TreeSet<>())));
+            assertThat(cursor(ctx, KIND, "L1").orElseThrow(), equalTo(new TriggerCursor(Instant.EPOCH, new TreeSet<>())));
             assertThat(trigger.evaluate(ctx.getKey(), ctx.getValue()).isPresent(), is(false));
             // since never goes below the epoch
             assertThat(fake.requests().get(1).query(), containsString("since_timestamp_opt=1970-01-01T00%3A00%3A00%2B00%3A00&"));

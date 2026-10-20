@@ -14,6 +14,7 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
+import io.kestra.plugin.mailchimp.models.MemberStatus;
 import io.kestra.plugin.mailchimp.models.SubscriberHash;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -65,8 +66,6 @@ import lombok.experimental.SuperBuilder;
     }
 )
 public class UpsertMember extends AbstractMailchimpTask implements RunnableTask<UpsertMember.Output> {
-    public enum Status { SUBSCRIBED, UNSUBSCRIBED, CLEANED, PENDING, TRANSACTIONAL }
-
     @Schema(
         title = "Audience ID",
         description = """
@@ -92,7 +91,7 @@ public class UpsertMember extends AbstractMailchimpTask implements RunnableTask<
     )
     @NotNull
     @PluginProperty(group = "main")
-    private Property<Status> statusIfNew;
+    private Property<MemberStatus> statusIfNew;
 
     @Schema(
         title = "Status",
@@ -100,7 +99,7 @@ public class UpsertMember extends AbstractMailchimpTask implements RunnableTask<
             New status for the member, also applied to an existing member: `SUBSCRIBED`, `UNSUBSCRIBED`, `CLEANED`, `PENDING` or `TRANSACTIONAL`. Not sent when unset."""
     )
     @PluginProperty(group = "processing")
-    private Property<Status> status;
+    private Property<MemberStatus> status;
 
     @Schema(
         title = "Merge fields",
@@ -146,13 +145,13 @@ public class UpsertMember extends AbstractMailchimpTask implements RunnableTask<
     public Output run(RunContext runContext) throws Exception {
         var rListId = MailchimpConnectionInterface.required(runContext, listId, "listId");
         var rEmail = MailchimpConnectionInterface.required(runContext, email, "email").trim();
-        var hash = SubscriberHash.of(rEmail.toLowerCase(Locale.ROOT));
-        var rStatusIfNew = runContext.render(statusIfNew).as(Status.class).orElseThrow(() -> new IllegalArgumentException("'statusIfNew' is required"));
+        var hash = SubscriberHash.of(rEmail);
+        var rStatusIfNew = runContext.render(statusIfNew).as(MemberStatus.class).orElseThrow(() -> new IllegalArgumentException("'statusIfNew' is required"));
 
         var body = new LinkedHashMap<String, Object>();
         body.put("email_address", rEmail);
         body.put("status_if_new", rStatusIfNew.name().toLowerCase(Locale.ROOT));
-        runContext.render(status).as(Status.class).ifPresent(s -> body.put("status", s.name().toLowerCase(Locale.ROOT)));
+        runContext.render(status).as(MemberStatus.class).ifPresent(s -> body.put("status", s.name().toLowerCase(Locale.ROOT)));
         var rMerge = runContext.render(mergeFields).asMap(String.class, Object.class);
         if (!rMerge.isEmpty()) {
             body.put("merge_fields", rMerge);

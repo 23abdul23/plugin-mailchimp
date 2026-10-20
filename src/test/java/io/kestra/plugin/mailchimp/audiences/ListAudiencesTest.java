@@ -9,6 +9,7 @@ import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 import io.kestra.plugin.mailchimp.ReadTaskSupport;
@@ -41,7 +42,7 @@ class ListAudiencesTest {
     private RunContextFactory runContextFactory;
 
     private ListAudiences.ListAudiencesBuilder<?, ?> task(FakeMailchimpServer fake) {
-        return ListAudiences.builder().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()));
+        return ListAudiences.builder().id(IdUtils.create()).type(ListAudiences.class.getName()).apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()));
     }
 
     @Test
@@ -143,32 +144,6 @@ class ListAudiencesTest {
     }
 
     @Test
-    void explicitCountAndOffsetDoASingleRequestWithoutPagination() throws Exception {
-        try (var fake = new FakeMailchimpServer()) {
-            // 5 rows returned for count=5 and 100 in total: auto-pagination would ask for more
-            fake.on("GET", PATH, Response.json(200, ReadTaskSupport.page("lists", 10, 5, 100)));
-
-            var out = task(fake).count(Property.ofValue(5)).offset(Property.ofValue(10)).build().run(runContextFactory.of());
-
-            assertThat(fake.requests(), hasSize(1));
-            assertThat(fake.requests().getFirst().query(), equalTo("count=5&offset=10"));
-            assertThat(out.getRows(), hasSize(5));
-            assertThat(out.getTotal(), is(100L));
-        }
-    }
-
-    @Test
-    void offsetAloneUsesDefaultCount() throws Exception {
-        try (var fake = new FakeMailchimpServer()) {
-            fake.on("GET", PATH, Response.json(200, ReadTaskSupport.page("lists", 0, 0, 0)));
-
-            task(fake).offset(Property.ofValue(7)).build().run(runContextFactory.of());
-
-            assertThat(fake.requests().getFirst().query(), equalTo("count=1000&offset=7"));
-        }
-    }
-
-    @Test
     void maxItemsStopsPagingEarly() throws Exception {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("GET", PATH, Response.json(200, ReadTaskSupport.page("lists", 0, 3, 50)));
@@ -193,13 +168,4 @@ class ListAudiencesTest {
         }
     }
 
-    @Test
-    void invalidCountOrOffsetFailsBeforeAnyRequest() throws Exception {
-        try (var fake = new FakeMailchimpServer()) {
-            for (var t : List.of(task(fake).count(Property.ofValue(0)), task(fake).count(Property.ofValue(1001)), task(fake).offset(Property.ofValue(-1)))) {
-                assertThrows(IllegalArgumentException.class, () -> t.build().run(runContextFactory.of()));
-            }
-            assertThat(fake.requests(), hasSize(0));
-        }
-    }
 }

@@ -7,6 +7,7 @@ import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
+import io.kestra.core.models.tasks.VoidOutput;
 import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
@@ -57,7 +58,7 @@ import lombok.experimental.SuperBuilder;
         )
     }
 )
-public class SendCampaign extends AbstractMailchimpTask implements RunnableTask<SendCampaign.Output> {
+public class SendCampaign extends AbstractMailchimpTask implements RunnableTask<VoidOutput> {
     private static final int MAX_ITEMS_IN_MESSAGE = 10;
 
     @Schema(
@@ -73,29 +74,26 @@ public class SendCampaign extends AbstractMailchimpTask implements RunnableTask<
     @Schema(
         title = "Require a ready checklist",
         description = """
-            When true (default), the send checklist must report `is_ready` before sending. When false the checklist is not called and `checklistReady` is null in the output."""
+            When true (default), the send checklist must report `is_ready` before sending. When false the checklist is not called."""
     )
     @PluginProperty(group = "reliability")
     private Property<Boolean> requireReady = Property.ofValue(true);
 
     @Override
-    public Output run(RunContext runContext) throws Exception {
-        var id = MailchimpConnectionInterface.required(runContext, campaignId, "campaignId");
-        var segment = MailchimpClient.segment(id);
-        var base = "/campaigns/" + segment;
-        var check = runContext.render(requireReady).as(Boolean.class).orElse(true);
+    public VoidOutput run(RunContext runContext) throws Exception {
+        var rCampaignId = MailchimpConnectionInterface.required(runContext, campaignId, "campaignId");
+        var base = "/campaigns/" + MailchimpClient.segment(rCampaignId);
+        var rRequireReady = runContext.render(requireReady).as(Boolean.class).orElse(true);
 
         try (var client = client(runContext)) {
-            Boolean ready = null;
-            if (check) {
+            if (rRequireReady) {
                 var checklist = client.sendForBody("GET", base + "/send-checklist", null, null);
-                ready = checklist.path("is_ready").isBoolean() && checklist.path("is_ready").booleanValue();
-                if (!ready) {
-                    throw new IllegalStateException("Campaign '" + id + "' is not ready to send, nothing was sent. " + describe(checklist.path("items")));
+                if (!checklist.path("is_ready").asBoolean(false)) {
+                    throw new IllegalStateException("Campaign '" + rCampaignId + "' is not ready to send, nothing was sent. " + describe(checklist.path("items")));
                 }
             }
             client.send("POST", base + "/actions/send", null, null);
-            return Output.builder().campaignId(id).checklistReady(ready).sent(true).build();
+            return null;
         }
     }
 
@@ -118,30 +116,5 @@ public class SendCampaign extends AbstractMailchimpTask implements RunnableTask<
 
     private static String cut(String s) {
         return s.length() > 200 ? s.substring(0, 200) + "..." : s;
-    }
-
-    @Builder
-    @Getter
-    public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(
-            title = "Campaign ID",
-            description = """
-                Id of the campaign that was sent, as given in the input."""
-        )
-        private final String campaignId;
-
-        @Schema(
-            title = "Checklist ready",
-            description = """
-                Whether the send checklist was ready. Null when `requireReady` is false because the checklist was not called."""
-        )
-        private final Boolean checklistReady;
-
-        @Schema(
-            title = "Sent",
-            description = """
-                True once Mailchimp accepted the send request."""
-        )
-        private final Boolean sent;
     }
 }

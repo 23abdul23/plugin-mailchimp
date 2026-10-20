@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import io.kestra.core.models.property.Property;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.reports.GetCampaignReport;
 import io.kestra.plugin.mailchimp.reports.ListEmailActivity;
 
@@ -17,15 +18,15 @@ import static org.hamcrest.Matchers.notNullValue;
 class CampaignReportIntegrationTest extends MailchimpIntegrationBase {
     @Test
     void getCampaignReport() throws Exception {
-        var out = GetCampaignReport.builder().apiKey(apiKeyProperty()).server(serverProperty())
+        var out = GetCampaignReport.builder().id(IdUtils.create()).type(GetCampaignReport.class.getName()).apiKey(apiKeyProperty()).server(serverProperty())
             .campaignId(Property.ofValue(campaignId())).build().run(runContextFactory.of());
 
-        assertThat(out.getRow(), notNullValue());
+        assertThat(out.getReport(), notNullValue());
     }
 
     @Test
     void listEmailActivity() throws Exception {
-        var out = ListEmailActivity.builder().apiKey(apiKeyProperty()).server(serverProperty())
+        var out = ListEmailActivity.builder().id(IdUtils.create()).type(ListEmailActivity.class.getName()).apiKey(apiKeyProperty()).server(serverProperty())
             .campaignId(Property.ofValue(campaignId())).maxItems(Property.ofValue(10)).build().run(runContextFactory.of());
 
         assertThat(out.getRows(), notNullValue());

@@ -1,4 +1,4 @@
-package io.kestra.plugin.mailchimp.models;
+package io.kestra.plugin.mailchimp.polling;
 
 import java.time.Instant;
 import java.util.List;

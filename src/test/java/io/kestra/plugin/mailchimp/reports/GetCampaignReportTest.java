@@ -1,12 +1,14 @@
 package io.kestra.plugin.mailchimp.reports;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 
@@ -28,6 +30,8 @@ class GetCampaignReportTest {
 
     private GetCampaignReport.GetCampaignReportBuilder<?, ?> task(FakeMailchimpServer fake) {
         return GetCampaignReport.builder()
+            .id(IdUtils.create())
+            .type(GetCampaignReport.class.getName())
             .apiKey(Property.ofValue("abc-us19"))
             .baseUrl(Property.ofValue(fake.baseUrl()))
             .campaignId(Property.ofValue("c1"));
@@ -44,11 +48,11 @@ class GetCampaignReportTest {
 
             var out = task(fake).build().run(runContextFactory.of());
 
-            var row = out.getRow();
+            var row = out.getReport();
             assertThat(row, hasEntry("id", "c1"));
             assertThat(row, hasEntry("emailsSent", 100));
             assertThat(row, hasEntry("unsubscribed", 2));
-            assertThat(row.get("opens"), equalTo(java.util.Map.of("opens_total", 50, "open_rate", 0.5)));
+            assertThat(row.get("opens"), equalTo(Map.of("opens_total", 50, "open_rate", 0.5)));
             assertThat(row, hasKey("clicks"));
             assertThat(row, hasKey("bounces"));
             assertThat(row, hasEntry("campaign_title", "May"));
@@ -65,8 +69,8 @@ class GetCampaignReportTest {
             var out = task(fake).fields(Property.ofValue(List.of("emails_sent", "clicks.clicks_total"))).build().run(runContextFactory.of());
 
             assertThat(fake.requests().getFirst().query(), equalTo("fields=emails_sent%2Cclicks.clicks_total"));
-            assertThat(out.getRow(), hasEntry("emailsSent", 100));
-            assertThat(out.getRow(), not(hasKey("opens")));
+            assertThat(out.getReport(), hasEntry("emailsSent", 100));
+            assertThat(out.getReport(), not(hasKey("opens")));
         }
     }
 
@@ -75,7 +79,7 @@ class GetCampaignReportTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("GET", "/3.0/reports/c1", Response.json(200, "{}"));
 
-            assertThat(task(fake).build().run(runContextFactory.of()).getRow(), anEmptyMap());
+            assertThat(task(fake).build().run(runContextFactory.of()).getReport(), anEmptyMap());
         }
     }
 

@@ -19,6 +19,7 @@ import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 import io.kestra.plugin.mailchimp.TriggerSupport;
 import io.kestra.plugin.mailchimp.TriggerSupport.Row;
+import io.kestra.plugin.mailchimp.models.MemberStatus;
 
 import jakarta.inject.Inject;
 import jakarta.validation.ConstraintViolationException;
@@ -57,7 +58,7 @@ class MemberStatusChangeTriggerTest {
             .baseUrl(Property.ofValue(fake.baseUrl()))
             .maxRetries(Property.ofValue(0))
             .listId(Property.ofValue("L1"))
-            .status(Property.ofValue(MemberStatusChangeTrigger.Status.UNSUBSCRIBED));
+            .status(Property.ofValue(MemberStatus.UNSUBSCRIBED));
     }
 
     @Test
@@ -91,7 +92,7 @@ class MemberStatusChangeTriggerTest {
             trigger.evaluate(ctx.getKey(), ctx.getValue());
             trigger.evaluate(ctx.getKey(), ctx.getValue());
 
-            assertThat(fake.requests().get(0).query(), equalTo("status=unsubscribed&sort_field=last_changed&sort_dir=DESC&count=1000&offset=0"));
+            assertThat(fake.requests().getFirst().query(), equalTo("status=unsubscribed&sort_field=last_changed&sort_dir=DESC&count=1000&offset=0&fields=members.id%2Cmembers.last_changed"));
             assertThat(fake.requests().get(1).query(), equalTo(
                 "status=unsubscribed&since_last_changed=2026-01-01T10%3A00%3A04%2B00%3A00"
                     + "&sort_field=last_changed&sort_dir=ASC&count=1000&offset=0"));
@@ -132,7 +133,7 @@ class MemberStatusChangeTriggerTest {
             trigger.evaluate(ctx.getKey(), ctx.getValue());
 
             // same flow and trigger id, now watching `cleaned`: its own first poll, nothing fires
-            var cleaned = trigger(fake).id(trigger.getId()).status(Property.ofValue(MemberStatusChangeTrigger.Status.CLEANED)).build();
+            var cleaned = trigger(fake).id(trigger.getId()).status(Property.ofValue(MemberStatus.CLEANED)).build();
             fake.on("GET", PATH, Response.json(200, page("members", m("c1", "10", "cleaned"))));
 
             assertThat(cleaned.evaluate(ctx.getKey(), ctx.getValue()).isPresent(), is(false));

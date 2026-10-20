@@ -19,9 +19,10 @@
 
 Single-module plugin. Source packages under `io.kestra.plugin.mailchimp`:
 
-- root: `AbstractMailchimpTask`, `AbstractMailchimpTrigger`, `MailchimpClient` (HTTP, auth, retry), `MailchimpConnectionInterface`, `MailchimpException`
+- root: `AbstractMailchimpTask`, `AbstractMailchimpFetchTask` (list tasks), `AbstractMailchimpTrigger`, `MailchimpClient` (HTTP, auth, retry), `MailchimpConnectionInterface`, `MailchimpException`
 - `account`, `audiences`, `campaigns`, `reports`: tasks and triggers (one `package-info.java` each)
-- `models`: shared helpers (`CursorPoll`, `TriggerCursor`, `FetchOutput`, `SortDir`, `SubscriberHash`)
+- `models`: `FetchOutput`, `Fetcher` (paged reads), `Rows` (query and row conversion), `MemberStatus`, `SortDir`, `SubscriberHash`
+- `polling`: `CursorPoll`, `TriggerCursor` (trigger position in the KV store)
 
 Uses Kestra's core `io.kestra.core.http.client.HttpClient` (no SDK). It replays a request once after a 429/503 and that cannot be configured, so POSTs carry a one-shot stream body, which Apache does not replay (see `MailchimpClient#request`).
 

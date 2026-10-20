@@ -1,4 +1,4 @@
-package io.kestra.plugin.mailchimp.models;
+package io.kestra.plugin.mailchimp.polling;
 
 import java.io.IOException;
 import java.net.URI;
@@ -28,6 +28,8 @@ import io.kestra.core.storages.kv.KVStore;
 import io.kestra.core.storages.kv.KVValue;
 import io.kestra.core.storages.kv.KVValueAndMetadata;
 import io.kestra.plugin.mailchimp.MailchimpClient;
+import io.kestra.plugin.mailchimp.models.Fetcher;
+import io.kestra.plugin.mailchimp.models.Rows;
 
 /**
  * Polling logic shared by every Mailchimp trigger: cursor in the namespace KV store, incremental query sorted
@@ -49,13 +51,7 @@ public final class CursorPoll {
     private CursorPoll() {
     }
 
-    /**
-     * @param kind       trigger kind in the KV key, e.g. {@code new_subscriber}, {@code member_status_<status>}
-     * @param scope      last KV key segment: the list id, or {@code campaign_<listId or all>}
-     * @param query      fixed filters (status, list_id...); {@code since_<timeField>} and the sort are added here
-     * @param timeField  Mailchimp timestamp field the cursor follows, e.g. {@code timestamp_opt}
-     * @param filter     rows failing it do not fire; the cursor still moves past them
-     */
+    /** {@code kind} and {@code scope} build the KV key; {@code query} holds the fixed filters; {@code filter} rows that fail it do not fire, but the cursor still moves past them. */
     public record Spec(String kind, String scope, String path, String arrayField, Map<String, String> query,
                        String timeField, Predicate<JsonNode> filter, Function<JsonNode, Map<String, Object>> mapper) {
     }
@@ -67,11 +63,7 @@ public final class CursorPoll {
         }
     }
 
-    /**
-     * First poll (or unreadable stored cursor): records the newest current position and returns empty, so what
-     * already exists never fires. Later polls return the rows that are new for the stored cursor, or empty.
-     * A Mailchimp error propagates before anything is written.
-     */
+    /** First poll (or unreadable cursor): records the current position and returns empty. Later polls return the new rows, or empty. */
     public static Optional<Result> poll(RunContext runContext, TriggerContext context, MailchimpClient client, Spec spec) throws Exception {
         var logger = runContext.logger();
         var kv = runContext.namespaceKv(context.getNamespace());
@@ -89,8 +81,10 @@ public final class CursorPoll {
             var query = new LinkedHashMap<>(spec.query());
             query.put("sort_field", spec.timeField());
             query.put("sort_dir", "DESC");
-            query.put("count", String.valueOf(FetchOutput.PAGE_SIZE));
+            query.put("count", String.valueOf(Fetcher.PAGE_SIZE));
             query.put("offset", "0");
+            // only the id and the timestamp are used here, so do not download whole records
+            query.put("fields", spec.arrayField() + ".id," + spec.arrayField() + "." + spec.timeField());
             var items = new ArrayList<TriggerCursor.Item>();
             for (var node : client.send("GET", spec.path(), query, null).path(spec.arrayField())) {
                 item(node, spec, logger).ifPresent(items::add);
@@ -103,10 +97,9 @@ public final class CursorPoll {
 
         var cursor = stored.get();
         var query = new LinkedHashMap<>(spec.query());
-        // 1 s slack: observed against the live API, `since_*` is exclusive and has whole-second precision, so a row written
-        // later in the cursor's own second would be missed without it; the rows it brings back are dropped by the cursor
+        // 1 s slack: `since_*` is exclusive with whole-second precision; the cursor drops the rows it brings back twice
         var since = cursor.timestamp().minusSeconds(1);
-        query.put("since_" + spec.timeField(), FetchOutput.iso(since.isBefore(Instant.EPOCH) ? Instant.EPOCH : since));
+        query.put("since_" + spec.timeField(), Rows.iso(since.isBefore(Instant.EPOCH) ? Instant.EPOCH : since));
         query.put("sort_field", spec.timeField());
         query.put("sort_dir", "ASC");
 
@@ -116,8 +109,10 @@ public final class CursorPoll {
         var latest = new Object() {
             TriggerCursor.Item item;
             Map<String, Object> row;
+            TriggerCursor running = cursor; // advanced page by page, never recomputed over everything read
+            int advancedTo;
         };
-        try (var collector = FetchOutput.collector(runContext, FetchType.STORE, null, spec.arrayField(), node -> {
+        try (var collector = Fetcher.collector(runContext, FetchType.STORE, null, spec.arrayField(), node -> {
             var item = item(node, spec, logger);
             item.ifPresent(read::add);
             item = item.filter(i -> spec.filter().test(node) && cursor.isNew(i.timestamp(), i.id()) && seen.add(i.id()));
@@ -132,12 +127,14 @@ public final class CursorPoll {
             }
             return row;
         })) {
-            client.getPagedWhile(spec.path(), query, FetchOutput.PAGE_SIZE, page -> {
+            client.getPagedWhile(spec.path(), query, Fetcher.PAGE_SIZE, page -> {
                 collector.accept(page);
+                latest.running = latest.running.advance(read.subList(latest.advancedTo, read.size()));
+                latest.advancedTo = read.size();
                 // next page only while a full page brought nothing that moves the cursor: guarantees progress
-                return page.path(spec.arrayField()).size() >= FetchOutput.PAGE_SIZE && cursor.advance(read).equals(cursor);
+                return page.path(spec.arrayField()).size() >= Fetcher.PAGE_SIZE && latest.running.equals(cursor);
             }, spec.arrayField());
-            var next = cursor.advance(read);
+            var next = latest.running;
             if (fired.isEmpty()) {
                 // only ignored rows (other status...): still move past them so they are not read again and again
                 if (!next.equals(cursor)) {
@@ -150,6 +147,7 @@ public final class CursorPoll {
         }
     }
 
+    // ponytail: more than 1000 rows in one second (bulk import) are re-read on every poll; resume from a stored offset if that is expected
     private static Optional<Instant> time(JsonNode node, String timeField) {
         try {
             return Optional.of(OffsetDateTime.parse(node.path(timeField).asText("")).toInstant());

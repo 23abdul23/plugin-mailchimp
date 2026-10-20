@@ -3,16 +3,19 @@ package io.kestra.plugin.mailchimp.integration;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import io.kestra.core.models.property.Property;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.mailchimp.ReadTaskSupport;
 import io.kestra.plugin.mailchimp.audiences.MemberStatusChangeTrigger;
 import io.kestra.plugin.mailchimp.audiences.UpsertMember;
+import io.kestra.plugin.mailchimp.models.MemberStatus;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
@@ -29,7 +32,7 @@ class MemberStatusChangeIntegrationTest extends MailchimpIntegrationBase {
             .type(MemberStatusChangeTrigger.class.getName())
             .apiKey(apiKeyProperty()).server(serverProperty())
             .listId(Property.ofValue(listId()))
-            .status(Property.ofValue(MemberStatusChangeTrigger.Status.UNSUBSCRIBED))
+            .status(Property.ofValue(MemberStatus.UNSUBSCRIBED))
             .build();
         var ctx = TestsUtils.mockTrigger(runContextFactory, trigger);
 
@@ -37,13 +40,13 @@ class MemberStatusChangeIntegrationTest extends MailchimpIntegrationBase {
         assertThat(trigger.evaluate(ctx.getKey(), ctx.getValue()).isEmpty(), is(true));
 
         var email = newEmail();
-        UpsertMember.builder().apiKey(apiKeyProperty()).server(serverProperty())
+        UpsertMember.builder().id(IdUtils.create()).type(UpsertMember.class.getName()).apiKey(apiKeyProperty()).server(serverProperty())
             .listId(Property.ofValue(listId())).email(Property.ofValue(email))
-            .statusIfNew(Property.ofValue(UpsertMember.Status.UNSUBSCRIBED))
+            .statusIfNew(Property.ofValue(MemberStatus.UNSUBSCRIBED))
             .build().run(runContextFactory.of());
 
         // 2nd poll: the member (the list is eventually consistent, so poll until it shows up)
-        var execution = eventually("trigger fired for the new member", () -> trigger.evaluate(ctx.getKey(), ctx.getValue()), java.util.Optional::isPresent).orElseThrow();
+        var execution = eventually("trigger fired for the new member", () -> trigger.evaluate(ctx.getKey(), ctx.getValue()), Optional::isPresent).orElseThrow();
         var vars = execution.getTrigger().getVariables();
         assertThat(((Number) vars.get("count")).intValue(), is(1));
         List<Map<String, Object>> rows = ReadTaskSupport.readIon(ctx.getKey().getRunContext(), URI.create(String.valueOf(vars.get("uri"))));

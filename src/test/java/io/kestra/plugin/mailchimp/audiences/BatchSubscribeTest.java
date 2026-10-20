@@ -19,6 +19,7 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.serializers.FileSerde;
 import io.kestra.core.serializers.JacksonMapper;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 
@@ -54,11 +55,13 @@ class BatchSubscribeTest {
     }
 
     private static List<Map<String, Object>> rows(int n) {
-        return IntStream.range(0, n).mapToObj(BatchSubscribeTest::row).collect(Collectors.toList());
+        return new ArrayList<>(IntStream.range(0, n).mapToObj(BatchSubscribeTest::row).toList());
     }
 
     private BatchSubscribe.BatchSubscribeBuilder<?, ?> task(FakeMailchimpServer fake, URI uri) {
         return BatchSubscribe.builder()
+            .id(IdUtils.create())
+            .type(BatchSubscribe.class.getName())
             .apiKey(Property.ofValue("abc-us19"))
             .baseUrl(Property.ofValue(fake.baseUrl()))
             .listId(Property.ofValue("L1"))
@@ -90,10 +93,10 @@ class BatchSubscribeTest {
             }
             assertThat(bodies.stream().map(b -> b.get("members").size()).toList(), equalTo(List.of(500, 500, 200)));
             // order preserved: first member of each chunk
-            assertThat(bodies.get(0).at("/members/0/email_address").asText(), equalTo("user0@example.com"));
+            assertThat(bodies.getFirst().at("/members/0/email_address").asText(), equalTo("user0@example.com"));
             assertThat(bodies.get(1).at("/members/0/email_address").asText(), equalTo("user500@example.com"));
             assertThat(bodies.get(2).at("/members/199/email_address").asText(), equalTo("user1199@example.com"));
-            assertThat(bodies.get(0).at("/members/0/status").asText(), equalTo("subscribed"));
+            assertThat(bodies.getFirst().at("/members/0/status").asText(), equalTo("subscribed"));
 
             assertThat(out.getTotalCreated(), is(1050L));
             assertThat(out.getTotalUpdated(), is(150L));
@@ -108,7 +111,7 @@ class BatchSubscribeTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("POST", PATH, Response.json(200, ok(2, 0)));
 
-            var out = BatchSubscribe.builder().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
+            var out = BatchSubscribe.builder().id(IdUtils.create()).type(BatchSubscribe.class.getName()).apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
                 .listId(Property.ofValue("L1")).from(List.of(row(0), row(1)))
                 .build().run(runContextFactory.of());
 
@@ -122,7 +125,7 @@ class BatchSubscribeTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("POST", PATH, Response.json(200, "{\"created\":1}"));
 
-            var e = assertThrows(IllegalStateException.class, () -> BatchSubscribe.builder().apiKey(Property.ofValue("abc-us19"))
+            var e = assertThrows(IllegalStateException.class, () -> BatchSubscribe.builder().id(IdUtils.create()).type(BatchSubscribe.class.getName()).apiKey(Property.ofValue("abc-us19"))
                 .baseUrl(Property.ofValue(fake.baseUrl())).listId(Property.ofValue("L1")).from(List.of(row(0)))
                 .build().run(runContextFactory.of()));
 
@@ -133,7 +136,7 @@ class BatchSubscribeTest {
     @Test
     void blankSourceFailsBeforeAnyRequest() throws Exception {
         try (var fake = new FakeMailchimpServer()) {
-            var e = assertThrows(IllegalArgumentException.class, () -> BatchSubscribe.builder().apiKey(Property.ofValue("abc-us19"))
+            var e = assertThrows(IllegalArgumentException.class, () -> BatchSubscribe.builder().id(IdUtils.create()).type(BatchSubscribe.class.getName()).apiKey(Property.ofValue("abc-us19"))
                 .baseUrl(Property.ofValue(fake.baseUrl())).listId(Property.ofValue("L1")).from("  ")
                 .build().run(runContextFactory.of()));
 
@@ -219,7 +222,7 @@ class BatchSubscribeTest {
             var out = task(fake, store(rc, rows(1500))).failOnError(Property.ofValue(false)).build().run(rc);
 
             assertThat(out.getErrorCount(), is(1500L));
-            assertThat(out.getErrors(), hasSize(BatchSubscribe.MAX_ERRORS));
+            assertThat(out.getErrors(), hasSize(1000));
         }
     }
 

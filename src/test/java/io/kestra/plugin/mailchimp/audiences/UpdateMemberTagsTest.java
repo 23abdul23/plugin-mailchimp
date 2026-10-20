@@ -1,12 +1,15 @@
 package io.kestra.plugin.mailchimp.audiences;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.serializers.JacksonMapper;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 import io.kestra.plugin.mailchimp.MailchimpException;
@@ -27,32 +30,30 @@ class UpdateMemberTagsTest {
     @Inject
     private RunContextFactory runContextFactory;
 
-    private static UpdateMemberTags.Tag tag(String name, String status) {
+    private static UpdateMemberTags.Tag tag(String name, UpdateMemberTags.TagStatus status) {
         return new UpdateMemberTags.Tag(name, status);
     }
 
     private UpdateMemberTags.UpdateMemberTagsBuilder<?, ?> task(FakeMailchimpServer fake) {
         return UpdateMemberTags.builder()
+            .id(IdUtils.create())
+            .type(UpdateMemberTags.class.getName())
             .apiKey(Property.ofValue("abc-us19"))
             .baseUrl(Property.ofValue(fake.baseUrl()))
             .listId(Property.ofValue("L1"))
             .email(Property.ofValue(" Jane.Doe+news@Example.COM "))
-            .tags(Property.ofValue(List.of(tag("x", "active"), tag("y", "inactive"))));
+            .tags(Property.ofValue(List.of(tag("x", UpdateMemberTags.TagStatus.ACTIVE), tag("y", UpdateMemberTags.TagStatus.INACTIVE))));
     }
 
     @Test
-    void postsTagsAndReturnsApplied() throws Exception {
+    void postsTagsWithLowerCaseStatus() throws Exception {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("POST", PATH, Response.empty(204));
 
-            var out = task(fake).build().run(runContextFactory.of());
+            task(fake).build().run(runContextFactory.of());
 
             var req = fake.requests().getFirst();
             assertThat(req.body(), equalTo("{\"tags\":[{\"name\":\"x\",\"status\":\"active\"},{\"name\":\"y\",\"status\":\"inactive\"}]}"));
-            assertThat(out.getApplied(), hasSize(2));
-            assertThat(out.getApplied().getFirst().getName(), equalTo("x"));
-            assertThat(out.getApplied().getFirst().getStatus(), equalTo("active"));
-            assertThat(out.getApplied().getLast().getStatus(), equalTo("inactive"));
         }
     }
 
@@ -61,7 +62,7 @@ class UpdateMemberTagsTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("POST", PATH, Response.empty(204));
 
-            task(fake).isSyncing(Property.ofValue(true)).build().run(runContextFactory.of());
+            task(fake).syncTags(Property.ofValue(true)).build().run(runContextFactory.of());
 
             assertThat(fake.requests().getFirst().body(), containsString("\"is_syncing\":true"));
         }
@@ -80,10 +81,10 @@ class UpdateMemberTagsTest {
     void invalidStatusOrEmailFailsBeforeHttp() throws Exception {
         try (var fake = new FakeMailchimpServer()) {
             var e = assertThrows(IllegalArgumentException.class,
-                () -> task(fake).tags(Property.ofValue(List.of(tag("x", "maybe")))).build().run(runContextFactory.of()));
-            assertThat(e.getMessage(), containsString("maybe"));
+                () -> task(fake).tags(Property.ofValue(List.of(tag("x", null)))).build().run(runContextFactory.of()));
+            assertThat(e.getMessage(), containsString("needs a 'status'"));
             assertThrows(IllegalArgumentException.class,
-                () -> task(fake).tags(Property.ofValue(List.of(tag(" ", "active")))).build().run(runContextFactory.of()));
+                () -> task(fake).tags(Property.ofValue(List.of(tag(" ", UpdateMemberTags.TagStatus.ACTIVE)))).build().run(runContextFactory.of()));
             assertThrows(IllegalArgumentException.class,
                 () -> task(fake).email(Property.ofValue("nope")).build().run(runContextFactory.of()));
 
@@ -118,15 +119,14 @@ class UpdateMemberTagsTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("POST", PATH, Response.empty(204));
             // what the flow YAML provides: plain maps
-            var yaml = java.util.Map.<String, Object>of(
-                "id", "t", "type", UpdateMemberTags.class.getName(),
+            var yaml = Map.<String, Object>of(
+                "id", IdUtils.create(), "type", UpdateMemberTags.class.getName(),
                 "apiKey", "abc-us19", "baseUrl", fake.baseUrl(), "listId", "L1", "email", "jane.doe+news@example.com",
-                "tags", List.of(java.util.Map.of("name", "x", "status", "active")));
-            var task = io.kestra.core.serializers.JacksonMapper.ofJson().convertValue(yaml, UpdateMemberTags.class);
+                "tags", List.of(Map.of("name", "x", "status", "ACTIVE")));
+            var task = JacksonMapper.ofJson().convertValue(yaml, UpdateMemberTags.class);
 
-            var out = task.run(runContextFactory.of());
+            task.run(runContextFactory.of());
 
-            assertThat(out.getApplied(), hasSize(1));
             assertThat(fake.requests().getFirst().body(), equalTo("{\"tags\":[{\"name\":\"x\",\"status\":\"active\"}]}"));
         }
     }

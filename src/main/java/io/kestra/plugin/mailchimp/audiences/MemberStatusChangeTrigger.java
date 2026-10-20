@@ -12,6 +12,8 @@ import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerContext;
 
+import io.kestra.plugin.mailchimp.models.MemberStatus;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
 import lombok.EqualsAndHashCode;
@@ -60,8 +62,6 @@ import lombok.experimental.SuperBuilder;
     }
 )
 public class MemberStatusChangeTrigger extends AbstractMemberTrigger {
-    public enum Status { SUBSCRIBED, UNSUBSCRIBED, CLEANED, PENDING, TRANSACTIONAL }
-
     @Schema(
         title = "Status",
         description = """
@@ -69,11 +69,11 @@ public class MemberStatusChangeTrigger extends AbstractMemberTrigger {
     )
     @NotNull
     @PluginProperty(group = "main")
-    private Property<Status> status;
+    private Property<MemberStatus> status;
 
     @Override
     public Optional<Execution> evaluate(ConditionContext conditionContext, TriggerContext context) throws Exception {
-        var rStatus = conditionContext.getRunContext().render(status).as(Status.class)
+        var rStatus = conditionContext.getRunContext().render(status).as(MemberStatus.class)
             .orElseThrow(() -> new IllegalArgumentException("'status' is required"))
             .name().toLowerCase(Locale.ROOT);
         // filtered server-side, checked again in case a row with another status slips through

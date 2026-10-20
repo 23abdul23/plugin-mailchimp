@@ -1,6 +1,7 @@
 package io.kestra.plugin.mailchimp.reports;
 
 import java.time.Instant;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -8,6 +9,7 @@ import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 import io.kestra.plugin.mailchimp.ReadTaskSupport;
@@ -42,6 +44,8 @@ class ListEmailActivityTest {
 
     private ListEmailActivity.ListEmailActivityBuilder<?, ?> task(FakeMailchimpServer fake) {
         return ListEmailActivity.builder()
+            .id(IdUtils.create())
+            .type(ListEmailActivity.class.getName())
             .apiKey(Property.ofValue("abc-us19"))
             .baseUrl(Property.ofValue(fake.baseUrl()))
             .campaignId(Property.ofValue("c1"))
@@ -53,7 +57,7 @@ class ListEmailActivityTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("GET", PATH, Response.json(200, BODY));
 
-            var out = ListEmailActivity.builder().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
+            var out = ListEmailActivity.builder().id(IdUtils.create()).type(ListEmailActivity.class.getName()).apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
                 .campaignId(Property.ofValue("c1")).build().run(runContextFactory.of());
 
             assertThat(out.getRows(), nullValue());
@@ -74,7 +78,7 @@ class ListEmailActivityTest {
             assertThat(row, hasEntry("emailId", "e1"));
             assertThat(row, hasEntry("campaign_id", "c1"));
             assertThat(row, hasEntry("list_id", "L1"));
-            assertThat((java.util.List<?>) row.get("activity"), hasSize(2));
+            assertThat((List<?>) row.get("activity"), hasSize(2));
             assertThat(out.getTotal(), is(2L));
             assertThat(fake.requests().getFirst().query(), equalTo("count=1000&offset=0"));
         }

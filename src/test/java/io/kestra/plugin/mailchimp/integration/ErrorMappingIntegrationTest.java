@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import io.kestra.core.models.property.Property;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.MailchimpClient;
 import io.kestra.plugin.mailchimp.MailchimpException;
 import io.kestra.plugin.mailchimp.account.Ping;
@@ -15,16 +16,12 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-/**
- * Error mapping against the real API, with read-only requests that fail naturally (Mailchimp ignores the
- * {@code X-Trigger-Error} header on {@code /ping} and {@code /lists}, so it cannot be used). A 403 cannot be
- * produced without a restricted key and is only covered by the unit tests.
- */
+/** Error mapping against the real API with read-only requests that fail naturally; 403 is only covered by unit tests. */
 @EnabledIfEnvironmentVariable(named = "MAILCHIMP_API_KEY", matches = ".+")
 class ErrorMappingIntegrationTest extends MailchimpIntegrationBase {
     @Test
     void invalidKeyIs401() {
-        var task = Ping.builder().apiKey(Property.ofValue("0".repeat(32) + "-" + server())).server(serverProperty())
+        var task = Ping.builder().id(IdUtils.create()).type(Ping.class.getName()).apiKey(Property.ofValue("0".repeat(32) + "-" + server())).server(serverProperty())
             .maxRetries(Property.ofValue(0)).build();
 
         var e = assertThrows(MailchimpException.class, () -> task.run(runContextFactory.of()));
@@ -34,7 +31,7 @@ class ErrorMappingIntegrationTest extends MailchimpIntegrationBase {
 
     @Test
     void unknownAudienceIs404() {
-        var task = ListMembers.builder().apiKey(apiKeyProperty()).server(serverProperty())
+        var task = ListMembers.builder().id(IdUtils.create()).type(ListMembers.class.getName()).apiKey(apiKeyProperty()).server(serverProperty())
             .listId(Property.ofValue("0000000000")).maxRetries(Property.ofValue(0)).build();
 
         var e = assertThrows(MailchimpException.class, () -> task.run(runContextFactory.of()));

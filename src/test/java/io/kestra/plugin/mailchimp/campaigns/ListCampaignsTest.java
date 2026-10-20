@@ -8,6 +8,7 @@ import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 import io.kestra.plugin.mailchimp.ReadTaskSupport;
@@ -40,7 +41,7 @@ class ListCampaignsTest {
     private RunContextFactory runContextFactory;
 
     private ListCampaigns.ListCampaignsBuilder<?, ?> task(FakeMailchimpServer fake) {
-        return ListCampaigns.builder().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()));
+        return ListCampaigns.builder().id(IdUtils.create()).type(ListCampaigns.class.getName()).apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()));
     }
 
     @Test

@@ -11,15 +11,14 @@ import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
 import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
-import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
+import io.kestra.plugin.mailchimp.AbstractMailchimpFetchTask;
 import io.kestra.plugin.mailchimp.models.FetchOutput;
+import io.kestra.plugin.mailchimp.models.Rows;
 import io.kestra.plugin.mailchimp.models.SortDir;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -60,7 +59,7 @@ import lombok.experimental.SuperBuilder;
         )
     }
 )
-public class ListCampaigns extends AbstractMailchimpTask implements RunnableTask<FetchOutput> {
+public class ListCampaigns extends AbstractMailchimpFetchTask {
     private static final Set<String> CAMEL = Set.of("send_time", "emails_sent");
 
     public enum Type { REGULAR, PLAINTEXT, ABSPLIT, RSS, VARIATE }
@@ -125,51 +124,23 @@ public class ListCampaigns extends AbstractMailchimpTask implements RunnableTask
     @PluginProperty(group = "processing")
     private Property<SortDir> sortDir;
 
-    @Schema(
-        title = "Fetch strategy",
-        description = """
-            `FETCH_ONE`: first campaign only.
-            `FETCH` (default): all campaigns in memory.
-            `STORE`: write rows as ION to internal storage and return the URI.
-            `NONE`: only count them."""
-    )
-    @Builder.Default
-    @PluginProperty(group = "processing")
-    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
-
-    @Schema(
-        title = "Max items",
-        minimum = "1",
-        description = """
-            Stop after this many campaigns (default: unlimited). Must be at least 1."""
-    )
-    @PluginProperty(group = "processing")
-    private Property<Integer> maxItems;
-
     /** Campaign JSON to row; shared with {@link CampaignSentTrigger}. */
     static Map<String, Object> toRow(JsonNode item) {
-        var row = FetchOutput.hoist(FetchOutput.row(item, CAMEL), item.path("recipients"), "list_id");
-        return FetchOutput.hoist(row, item.path("settings"), "subject_line", "title");
+        var row = Rows.hoist(Rows.row(item, CAMEL), item.path("recipients"), "list_id");
+        return Rows.hoist(row, item.path("settings"), "subject_line", "title");
     }
 
     @Override
     public FetchOutput run(RunContext runContext) throws Exception {
         var query = new LinkedHashMap<String, String>();
-        FetchOutput.put(query, "type", runContext.render(campaignType).as(Type.class));
-        FetchOutput.put(query, "status", runContext.render(status).as(Status.class));
-        FetchOutput.put(query, "since_send_time", runContext.render(sinceSendTime).as(Instant.class));
-        FetchOutput.put(query, "before_send_time", runContext.render(beforeSendTime).as(Instant.class));
-        FetchOutput.put(query, "list_id", runContext.render(listId).as(String.class));
-        FetchOutput.put(query, "sort_field", runContext.render(sortField).as(SortField.class));
-        FetchOutput.put(query, "sort_dir", runContext.render(sortDir).as(SortDir.class));
+        Rows.put(query, "type", runContext.render(campaignType).as(Type.class));
+        Rows.put(query, "status", runContext.render(status).as(Status.class));
+        Rows.put(query, "since_send_time", runContext.render(sinceSendTime).as(Instant.class));
+        Rows.put(query, "before_send_time", runContext.render(beforeSendTime).as(Instant.class));
+        Rows.put(query, "list_id", runContext.render(listId).as(String.class));
+        Rows.put(query, "sort_field", runContext.render(sortField).as(SortField.class));
+        Rows.put(query, "sort_dir", runContext.render(sortDir).as(SortDir.class));
 
-        try (var client = client(runContext)) {
-            return FetchOutput.fetchPaged(
-                runContext, client, "/campaigns", query, "campaigns",
-                runContext.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH),
-                runContext.render(maxItems).as(Integer.class).orElse(null),
-                ListCampaigns::toRow
-            );
-        }
+        return fetch(runContext, "/campaigns", query, "campaigns", FetchType.FETCH, ListCampaigns::toRow);
     }
 }

@@ -15,7 +15,7 @@ import io.kestra.core.runners.RunContext;
 import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
-import io.kestra.plugin.mailchimp.models.FetchOutput;
+import io.kestra.plugin.mailchimp.models.Rows;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
@@ -36,7 +36,7 @@ import lombok.experimental.SuperBuilder;
     description = """
         Reads the report summary of a sent campaign with `GET /reports/{campaignId}`.
 
-        The row exposes `emailsSent`, `unsubscribed`, `opens`, `clicks` and `bounces` (the last three keep their nested Mailchimp keys such as `opens_total`), plus `id`, `sendTime`, `listId` and `subjectLine` when present; every other Mailchimp field keeps its original key. Use `fields` to trim the response."""
+        The report exposes `emailsSent`, `unsubscribed`, `opens`, `clicks` and `bounces` (the last three keep their nested Mailchimp keys such as `opens_total`), plus `id`, `sendTime`, `listId` and `subjectLine` when present; every other Mailchimp field keeps its original key. Use `fields` to trim the response."""
 )
 @Plugin(
     examples = {
@@ -87,10 +87,10 @@ public class GetCampaignReport extends AbstractMailchimpTask implements Runnable
         var path = "/reports/" + MailchimpClient.segment(rCampaignId);
 
         var query = new LinkedHashMap<String, String>();
-        FetchOutput.put(query, "fields", Optional.of(runContext.render(fields).asList(String.class)));
+        Rows.put(query, "fields", Optional.of(runContext.render(fields).asList(String.class)));
 
         try (var client = client(runContext)) {
-            return Output.builder().row(FetchOutput.row(client.sendForBody("GET", path, query, null), CAMEL)).build();
+            return Output.builder().report(Rows.row(client.sendForBody("GET", path, query, null), CAMEL)).build();
         }
     }
 
@@ -102,6 +102,6 @@ public class GetCampaignReport extends AbstractMailchimpTask implements Runnable
             description = """
                 The campaign report summary, with the main fields in camelCase and the rest under their Mailchimp keys."""
         )
-        private final Map<String, Object> row;
+        private final Map<String, Object> report;
     }
 }

@@ -9,7 +9,6 @@ import java.util.stream.IntStream;
 import io.kestra.core.runners.RunContext;
 import io.kestra.core.serializers.FileSerde;
 
-
 /** Shared helpers of the read-task tests. */
 public final class ReadTaskSupport {
     private ReadTaskSupport() {

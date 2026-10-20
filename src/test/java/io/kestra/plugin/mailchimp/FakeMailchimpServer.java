@@ -6,12 +6,14 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 
 import com.sun.net.httpserver.HttpExchange;
@@ -58,12 +60,13 @@ public class FakeMailchimpServer implements AutoCloseable {
     private final Map<String, Deque<Response>> scripts = new HashMap<>();
     private final Map<String, Response> last = new HashMap<>();
     private final Map<String, Function<Recorded, Response>> handlers = new HashMap<>();
-    private final List<Recorded> requests = Collections.synchronizedList(new ArrayList<>());
+    private final List<Recorded> requests = new CopyOnWriteArrayList<>();
+    private final ExecutorService executor = Executors.newCachedThreadPool();
 
     public FakeMailchimpServer() throws IOException {
         server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/", this::handle);
-        server.setExecutor(java.util.concurrent.Executors.newCachedThreadPool()); // a delayed answer must not block the next request
+        server.setExecutor(executor); // a delayed answer must not block the next request
         server.start();
     }
 
@@ -136,5 +139,6 @@ public class FakeMailchimpServer implements AutoCloseable {
     @Override
     public void close() {
         server.stop(0);
+        executor.shutdownNow();
     }
 }

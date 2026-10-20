@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.runners.RunContextFactory;
+import io.kestra.core.utils.IdUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 import io.kestra.plugin.mailchimp.MailchimpException;
@@ -31,6 +32,8 @@ class SendCampaignTest {
 
     private SendCampaign.SendCampaignBuilder<?, ?> task(FakeMailchimpServer fake) {
         return SendCampaign.builder()
+            .id(IdUtils.create())
+            .type(SendCampaign.class.getName())
             .apiKey(Property.ofValue("abc-us19"))
             .baseUrl(Property.ofValue(fake.baseUrl()))
             .campaignId(Property.ofValue("C1"));
@@ -76,13 +79,10 @@ class SendCampaignTest {
             fake.on("GET", CHECKLIST, Response.json(200, "{\"is_ready\":true,\"items\":[]}"));
             fake.on("POST", SEND, Response.empty(204));
 
-            var out = task(fake).build().run(runContextFactory.of());
+            task(fake).build().run(runContextFactory.of());
 
             assertThat(fake.requests(), hasSize(2));
             assertThat(posts(fake), equalTo(1L));
-            assertThat(out.getSent(), equalTo(true));
-            assertThat(out.getChecklistReady(), equalTo(true));
-            assertThat(out.getCampaignId(), equalTo("C1"));
         }
     }
 
@@ -91,12 +91,10 @@ class SendCampaignTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("POST", SEND, Response.empty(204));
 
-            var out = task(fake).requireReady(Property.ofValue(false)).build().run(runContextFactory.of());
+            task(fake).requireReady(Property.ofValue(false)).build().run(runContextFactory.of());
 
             assertThat(fake.requests(), hasSize(1));
             assertThat(fake.requests().getFirst().method(), equalTo("POST"));
-            assertThat(out.getChecklistReady(), nullValue());
-            assertThat(out.getSent(), equalTo(true));
         }
     }
 
@@ -132,10 +130,9 @@ class SendCampaignTest {
         try (var fake = new FakeMailchimpServer()) {
             fake.on("POST", SEND, Response.json(429, "{\"title\":\"Too Many Requests\"}").withHeader("Retry-After", "0"), Response.empty(204));
 
-            var out = task(fake).requireReady(Property.ofValue(false)).maxRetries(Property.ofValue(1)).build().run(runContextFactory.of());
+            task(fake).requireReady(Property.ofValue(false)).maxRetries(Property.ofValue(1)).build().run(runContextFactory.of());
 
             assertThat(posts(fake), equalTo(2L));
-            assertThat(out.getSent(), equalTo(true));
         }
     }
 

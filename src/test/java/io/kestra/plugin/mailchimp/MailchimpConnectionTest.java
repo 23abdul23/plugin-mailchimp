@@ -9,6 +9,9 @@ import io.kestra.plugin.mailchimp.account.Ping;
 
 import jakarta.inject.Inject;
 
+import java.time.Duration;
+import java.time.Duration;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
@@ -67,7 +70,7 @@ class MailchimpConnectionTest {
     @Test
     void outOfRangeRetriesOrTimeoutFailBeforeAnyRequest() {
         var tooMany = task().apiKey(Property.ofValue("abc-us19")).maxRetries(Property.ofValue(11)).build();
-        var noTimeout = task().apiKey(Property.ofValue("abc-us19")).timeout(Property.ofValue(java.time.Duration.ZERO)).build();
+        var noTimeout = task().apiKey(Property.ofValue("abc-us19")).timeout(Property.ofValue(Duration.ZERO)).build();
 
         assertThat(assertThrows(IllegalArgumentException.class, () -> MailchimpConnectionInterface.client(runContextFactory.of(), tooMany)).getMessage(), containsString("maxRetries"));
         assertThat(assertThrows(IllegalArgumentException.class, () -> MailchimpConnectionInterface.client(runContextFactory.of(), noTimeout)).getMessage(), containsString("timeout"));
@@ -211,7 +214,7 @@ class MailchimpConnectionTest {
     @Test
     void clientNeverLeaksTokenInHeaderError() {
         var e = assertThrows(IllegalArgumentException.class,
-            () -> new MailchimpClient(runContextFactory.of(), "http://localhost:1", "SECRETVALUE\nrest", 0, java.time.Duration.ofSeconds(1), ms -> { }));
+            () -> new MailchimpClient(runContextFactory.of(), "http://localhost:1", "SECRETVALUE\nrest", 0, Duration.ofSeconds(1), ms -> { }));
         assertThat(e.getMessage(), not(containsString("SECRETVALUE")));
     }
 }
