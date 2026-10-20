@@ -72,7 +72,7 @@ public class CampaignSentTrigger extends AbstractMailchimpTrigger implements Pol
         description = """
             Only campaigns sent to this audience (`list_id`). All audiences when not set."""
     )
-    @PluginProperty(group = "main")
+    @PluginProperty(group = "processing")
     private Property<String> listId;
 
     @Builder.Default

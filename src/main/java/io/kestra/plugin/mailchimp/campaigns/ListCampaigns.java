@@ -114,7 +114,7 @@ public class ListCampaigns extends AbstractMailchimpTask implements RunnableTask
         description = """
             Field to sort by: `CREATE_TIME` or `SEND_TIME`. Sent lower case to Mailchimp."""
     )
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "processing")
     private Property<SortField> sortField;
 
     @Schema(
@@ -122,7 +122,7 @@ public class ListCampaigns extends AbstractMailchimpTask implements RunnableTask
         description = """
             `ASC` or `DESC`; Mailchimp only applies it together with `sortField`."""
     )
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "processing")
     private Property<SortDir> sortDir;
 
     @Schema(

@@ -75,7 +75,7 @@ public class SendCampaign extends AbstractMailchimpTask implements RunnableTask<
         description = """
             When true (default), the send checklist must report `is_ready` before sending. When false the checklist is not called and `checklistReady` is null in the output."""
     )
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "reliability")
     private Property<Boolean> requireReady = Property.ofValue(true);
 
     @Override

@@ -78,7 +78,7 @@ public class GetCampaignReport extends AbstractMailchimpTask implements Runnable
         description = """
             Restrict the response to these Mailchimp fields, using Mailchimp's dotted syntax, e.g. `emails_sent`, `opens.opens_total`."""
     )
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "processing")
     private Property<List<String>> fields;
 
     @Override

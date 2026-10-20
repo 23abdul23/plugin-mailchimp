@@ -14,6 +14,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.io.entity.InputStreamEntity;
 import org.slf4j.Logger;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -148,9 +150,18 @@ public class MailchimpClient implements Closeable {
         if (json != null) {
             builder.body(replayable
                 ? HttpRequest.StringRequestBody.builder().content(json).contentType("application/json").build()
-                : HttpRequest.InputStreamRequestBody.builder().content(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))).contentType("application/json").build());
+                : oneShot(json));
         }
         return builder.build();
+    }
+
+    /** A stream entity Apache cannot replay, but with a known length so the POST carries Content-Length, not chunked encoding. */
+    private static HttpRequest.RequestBody oneShot(String json) {
+        var bytes = json.getBytes(StandardCharsets.UTF_8);
+        return HttpRequest.PassthroughRequestBody.builder()
+            .entity(new InputStreamEntity(new ByteArrayInputStream(bytes), bytes.length, ContentType.APPLICATION_JSON))
+            .contentType("application/json")
+            .build();
     }
 
     private static boolean hasIoCause(Throwable e) {

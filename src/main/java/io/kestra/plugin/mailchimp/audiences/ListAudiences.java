@@ -124,7 +124,7 @@ public class ListAudiences extends AbstractMailchimpTask implements RunnableTask
         description = """
             Restrict the response to these Mailchimp fields, using Mailchimp's dotted syntax, e.g. `lists.id`, `lists.name`, `total_items`."""
     )
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "processing")
     private Property<List<String>> fields;
 
     @Schema(

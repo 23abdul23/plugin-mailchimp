@@ -118,6 +118,19 @@ class BatchSubscribeTest {
     }
 
     @Test
+    void responseWithoutCountsFailsInsteadOfCountingZero() throws Exception {
+        try (var fake = new FakeMailchimpServer()) {
+            fake.on("POST", PATH, Response.json(200, "{\"created\":1}"));
+
+            var e = assertThrows(IllegalStateException.class, () -> BatchSubscribe.builder().apiKey(Property.ofValue("abc-us19"))
+                .baseUrl(Property.ofValue(fake.baseUrl())).listId(Property.ofValue("L1")).from(List.of(row(0)))
+                .build().run(runContextFactory.of()));
+
+            assertThat(e.getMessage(), containsString("'total_created' is missing"));
+        }
+    }
+
+    @Test
     void blankSourceFailsBeforeAnyRequest() throws Exception {
         try (var fake = new FakeMailchimpServer()) {
             var e = assertThrows(IllegalArgumentException.class, () -> BatchSubscribe.builder().apiKey(Property.ofValue("abc-us19"))

@@ -215,6 +215,12 @@ public class BatchSubscribe extends AbstractMailchimpTask implements RunnableTas
                     body.putAll(flags);
                     try {
                         var response = client.sendForBody("POST", "/lists/" + MailchimpClient.segment(rListId), null, body);
+                        for (var field : List.of("total_created", "total_updated", "error_count")) {
+                            if (!response.path(field).canConvertToLong()) {
+                                // a renamed field must not silently count as 0 members
+                                throw new IllegalStateException("Unexpected Mailchimp response: '" + field + "' is missing or not a number");
+                            }
+                        }
                         totals[0] += response.path("total_created").asLong(0);
                         totals[1] += response.path("total_updated").asLong(0);
                         totals[2] += response.path("error_count").asLong(0);

@@ -109,7 +109,7 @@ public class ListMembers extends AbstractMailchimpTask implements RunnableTask<F
         description = """
             Field to sort by: `TIMESTAMP_OPT`, `TIMESTAMP_SIGNUP` or `LAST_CHANGED`. Sent lower case to Mailchimp."""
     )
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "processing")
     private Property<SortField> sortField;
 
     @Schema(
@@ -117,7 +117,7 @@ public class ListMembers extends AbstractMailchimpTask implements RunnableTask<F
         description = """
             `ASC` or `DESC`; Mailchimp only applies it together with `sortField`."""
     )
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "processing")
     private Property<SortDir> sortDir;
 
     @Schema(
@@ -125,7 +125,7 @@ public class ListMembers extends AbstractMailchimpTask implements RunnableTask<F
         description = """
             Restrict the response to these Mailchimp fields, using Mailchimp's dotted syntax, e.g. `members.id`, `members.email_address`, `total_items`."""
     )
-    @PluginProperty(group = "advanced")
+    @PluginProperty(group = "processing")
     private Property<List<String>> fields;
 
     @Schema(

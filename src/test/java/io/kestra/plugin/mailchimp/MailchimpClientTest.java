@@ -217,6 +217,21 @@ class MailchimpClientTest {
     }
 
     @Test
+    void postCarriesContentLengthNotChunkedEncoding() throws Exception {
+        try (var fake = new FakeMailchimpServer(); var client = client(fake, 0)) {
+            fake.on("POST", "/3.0/x", Response.json(200, "{}"));
+
+            client.send("POST", "/x", null, java.util.Map.of("a", "b"));
+            client.send("POST", "/x", null, null);
+
+            var requests = fake.requests();
+            assertThat(requests.get(0).header("content-length"), equalTo("9"));
+            assertThat(requests.get(0).header("transfer-encoding"), equalTo(null));
+            assertThat(requests.get(1).header("content-length"), equalTo("2"));
+        }
+    }
+
+    @Test
     void emptyBodyPassesForPlainCallsButFailsWhereABodyIsRequired() throws Exception {
         try (var fake = new FakeMailchimpServer(); var client = client(fake, 0)) {
             fake.on("GET", "/3.0/ping", Response.empty(200));
