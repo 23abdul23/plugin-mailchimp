@@ -3,7 +3,6 @@ package io.kestra.plugin.mailchimp.audiences;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 import io.kestra.core.models.annotations.Example;
 import io.kestra.core.models.annotations.Plugin;
@@ -116,7 +115,10 @@ public class UpdateMemberTags extends AbstractMailchimpTask implements RunnableT
             if (t.getStatus() == null) {
                 throw new IllegalArgumentException("Tag '" + t.getName() + "' needs a 'status': ACTIVE or INACTIVE");
             }
-            return Map.of("name", t.getName(), "status", t.getStatus().name().toLowerCase(Locale.ROOT));
+            var change = new LinkedHashMap<String, String>();
+            change.put("name", t.getName());
+            change.put("status", t.getStatus().name().toLowerCase(Locale.ROOT));
+            return change;
         }).toList();
 
         var body = new LinkedHashMap<String, Object>();

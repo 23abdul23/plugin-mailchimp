@@ -147,7 +147,7 @@ public final class CursorPoll {
         }
     }
 
-    // ponytail: more than 1000 rows in one second (bulk import) are re-read on every poll; resume from a stored offset if that is expected
+//     more than 1000 rows in one second (bulk import) are re-read on every poll; resume from a stored offset if that is expected
     private static Optional<Instant> time(JsonNode node, String timeField) {
         try {
             return Optional.of(OffsetDateTime.parse(node.path(timeField).asText("")).toInstant());
