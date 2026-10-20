@@ -78,7 +78,6 @@ class UpsertMemberTest {
 
             assertThat(out.getId(), equalTo(HASH));
             assertThat(out.getEmailAddress(), equalTo("jane.doe+news@example.com"));
-            assertThat(out.getSubscriberHash(), equalTo(HASH));
             assertThat(out.getStatus(), equalTo("subscribed"));
         }
     }

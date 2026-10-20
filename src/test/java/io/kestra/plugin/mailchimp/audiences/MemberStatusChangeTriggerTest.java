@@ -22,6 +22,7 @@ import io.kestra.plugin.mailchimp.TriggerSupport.Row;
 
 import jakarta.inject.Inject;
 import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.ConstraintViolationException;
 
 import static io.kestra.plugin.mailchimp.TriggerSupport.cursor;
 import static io.kestra.plugin.mailchimp.TriggerSupport.drain;
@@ -118,7 +119,7 @@ class MemberStatusChangeTriggerTest {
             var trigger = trigger(fake).interval(Duration.ofSeconds(29)).build();
             var ctx = TestsUtils.mockTrigger(runContextFactory, trigger);
 
-            assertThrows(IllegalArgumentException.class, () -> trigger.evaluate(ctx.getKey(), ctx.getValue()));
+            assertThrows(ConstraintViolationException.class, () -> trigger.evaluate(ctx.getKey(), ctx.getValue()));
         }
     }
 

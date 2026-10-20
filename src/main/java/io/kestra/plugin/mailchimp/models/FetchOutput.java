@@ -44,19 +44,39 @@ public class FetchOutput implements Output {
     static final int PAGE_SIZE = 1000;
     private static final DateTimeFormatter ISO = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssxxx");
 
-    @Schema(title = "First record", description = "Populated when `fetchType` is `FETCH_ONE`.")
+    @Schema(
+        title = "First record",
+        description = """
+            Populated when `fetchType` is `FETCH_ONE`."""
+    )
     private final Map<String, Object> row;
 
-    @Schema(title = "Records", description = "Populated when `fetchType` is `FETCH`.")
+    @Schema(
+        title = "Records",
+        description = """
+            Populated when `fetchType` is `FETCH`."""
+    )
     private final List<Map<String, Object>> rows;
 
-    @Schema(title = "Stored records URI", description = "Populated when `fetchType` is `STORE`: an ION file in internal storage.")
+    @Schema(
+        title = "Stored records URI",
+        description = """
+            Populated when `fetchType` is `STORE`: an ION file in internal storage."""
+    )
     private final URI uri;
 
-    @Schema(title = "Record count", description = "Number of records read from Mailchimp.")
+    @Schema(
+        title = "Record count",
+        description = """
+            Number of records read from Mailchimp."""
+    )
     private final Long size;
 
-    @Schema(title = "Total count", description = "Total number of matching records reported by Mailchimp (`total_items`), when available.")
+    @Schema(
+        title = "Total count",
+        description = """
+            Total number of matching records reported by Mailchimp (`total_items`), when available."""
+    )
     private final Long total;
 
     /** ISO-8601 with numeric offset (e.g. {@code 2024-01-01T00:00:00+00:00}), as Mailchimp expects. */

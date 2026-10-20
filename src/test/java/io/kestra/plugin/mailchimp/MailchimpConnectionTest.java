@@ -49,6 +49,31 @@ class MailchimpConnectionTest {
     }
 
     @Test
+    void keyWithoutDataCenterSuffixNeverEchoesItsSecretPart() {
+        var task = task().apiKey(Property.ofValue("md-TopSecretPart123")).build();
+
+        var e = assertThrows(IllegalArgumentException.class, () -> MailchimpConnectionInterface.baseUrl(runContextFactory.of(), task));
+        assertThat(e.getMessage(), containsString("data center suffix"));
+        assertThat(e.getMessage(), not(containsString("TopSecretPart123")));
+    }
+
+    @Test
+    void blankRequiredValueNamesTheProperty() {
+        var e = assertThrows(IllegalArgumentException.class,
+            () -> MailchimpConnectionInterface.required(runContextFactory.of(), Property.ofValue("  "), "listId"));
+        assertThat(e.getMessage(), containsString("'listId' is required and must not be blank"));
+    }
+
+    @Test
+    void outOfRangeRetriesOrTimeoutFailBeforeAnyRequest() {
+        var tooMany = task().apiKey(Property.ofValue("abc-us19")).maxRetries(Property.ofValue(11)).build();
+        var noTimeout = task().apiKey(Property.ofValue("abc-us19")).timeout(Property.ofValue(java.time.Duration.ZERO)).build();
+
+        assertThat(assertThrows(IllegalArgumentException.class, () -> MailchimpConnectionInterface.client(runContextFactory.of(), tooMany)).getMessage(), containsString("maxRetries"));
+        assertThat(assertThrows(IllegalArgumentException.class, () -> MailchimpConnectionInterface.client(runContextFactory.of(), noTimeout)).getMessage(), containsString("timeout"));
+    }
+
+    @Test
     void accessTokenWithServer() throws Exception {
         var task = task().accessToken(Property.ofValue("tok")).server(Property.ofValue("us6")).build();
 

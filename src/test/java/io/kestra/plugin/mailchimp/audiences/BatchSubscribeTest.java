@@ -62,7 +62,7 @@ class BatchSubscribeTest {
             .apiKey(Property.ofValue("abc-us19"))
             .baseUrl(Property.ofValue(fake.baseUrl()))
             .listId(Property.ofValue("L1"))
-            .from(Property.ofValue(uri.toString()));
+            .from(uri.toString());
     }
 
     private static JsonNode json(String s) throws Exception {
@@ -100,6 +100,32 @@ class BatchSubscribeTest {
             assertThat(out.getErrorCount(), is(0L));
             assertThat(out.getErrors(), hasSize(0));
             assertThat(out.getBatches(), is(3));
+        }
+    }
+
+    @Test
+    void acceptsAnInlineListOfMembers() throws Exception {
+        try (var fake = new FakeMailchimpServer()) {
+            fake.on("POST", PATH, Response.json(200, ok(2, 0)));
+
+            var out = BatchSubscribe.builder().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
+                .listId(Property.ofValue("L1")).from(List.of(row(0), row(1)))
+                .build().run(runContextFactory.of());
+
+            assertThat(json(fake.requests().getFirst().body()).get("members").size(), is(2));
+            assertThat(out.getTotalCreated(), is(2L));
+        }
+    }
+
+    @Test
+    void blankSourceFailsBeforeAnyRequest() throws Exception {
+        try (var fake = new FakeMailchimpServer()) {
+            var e = assertThrows(IllegalArgumentException.class, () -> BatchSubscribe.builder().apiKey(Property.ofValue("abc-us19"))
+                .baseUrl(Property.ofValue(fake.baseUrl())).listId(Property.ofValue("L1")).from("  ")
+                .build().run(runContextFactory.of()));
+
+            assertThat(e.getMessage(), containsString("'from' is required"));
+            assertThat(fake.requests(), hasSize(0));
         }
     }
 

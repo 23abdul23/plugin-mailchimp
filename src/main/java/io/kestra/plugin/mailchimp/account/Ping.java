@@ -21,7 +21,8 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @Schema(
     title = "Ping Mailchimp",
-    description = "Calls the Mailchimp `GET /ping` endpoint to check that the credentials and data center are valid."
+    description = """
+        Calls the Mailchimp `GET /ping` endpoint to check that the credentials and data center are valid."""
 )
 @Plugin(
     examples = {
@@ -45,7 +46,7 @@ public class Ping extends AbstractMailchimpTask implements RunnableTask<Ping.Out
     @Override
     public Output run(RunContext runContext) throws Exception {
         try (var client = client(runContext)) {
-            var response = client.send("GET", "/ping", null, null);
+            var response = client.sendForBody("GET", "/ping", null, null);
             var status = response.path("health_status").asText();
             runContext.logger().info("Mailchimp says: {}", status);
             return Output.builder().healthStatus(status).build();
@@ -55,7 +56,11 @@ public class Ping extends AbstractMailchimpTask implements RunnableTask<Ping.Out
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Health status", description = "Value of `health_status` returned by Mailchimp, `Everything's Chimpy!` when healthy.")
+        @Schema(
+            title = "Health status",
+            description = """
+                Value of `health_status` returned by Mailchimp, `Everything's Chimpy!` when healthy."""
+        )
         private final String healthStatus;
     }
 }

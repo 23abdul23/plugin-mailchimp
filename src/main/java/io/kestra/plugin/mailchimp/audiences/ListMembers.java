@@ -16,6 +16,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
 import io.kestra.plugin.mailchimp.models.FetchOutput;
@@ -70,48 +71,82 @@ public class ListMembers extends AbstractMailchimpTask implements RunnableTask<F
 
     public enum SortField { TIMESTAMP_OPT, TIMESTAMP_SIGNUP, LAST_CHANGED }
 
-    @Schema(title = "Audience ID", description = "Mailchimp audience (list) id, found in the audience settings or with `ListAudiences`.")
+    @Schema(
+        title = "Audience ID",
+        description = """
+            Mailchimp audience (list) id, found in the audience settings or with `ListAudiences`."""
+    )
     @NotNull
     @PluginProperty(group = "main")
     private Property<String> listId;
 
-    @Schema(title = "Status", description = "Only members with this status (sent lower case, e.g. `subscribed`).")
+    @Schema(
+        title = "Status",
+        description = """
+            Only members with this status: `SUBSCRIBED`, `UNSUBSCRIBED`, `CLEANED`, `PENDING`, `TRANSACTIONAL` or `ARCHIVED`. Sent lower case to Mailchimp."""
+    )
     @PluginProperty(group = "processing")
     private Property<Status> status;
 
-    @Schema(title = "Changed since", description = "Only members changed after this ISO-8601 date and time (`since_last_changed`).")
+    @Schema(
+        title = "Changed since",
+        description = """
+            Only members changed after this ISO-8601 date and time (`since_last_changed`)."""
+    )
     @PluginProperty(group = "processing")
     private Property<Instant> sinceLastChanged;
 
-    @Schema(title = "Opted in since", description = "Only members who opted in after this ISO-8601 date and time (`since_timestamp_opt`).")
+    @Schema(
+        title = "Opted in since",
+        description = """
+            Only members who opted in after this ISO-8601 date and time (`since_timestamp_opt`)."""
+    )
     @PluginProperty(group = "processing")
     private Property<Instant> sinceTimestampOpt;
 
-    @Schema(title = "Sort field", description = "Field to sort by (sent lower case, e.g. `timestamp_opt`).")
+    @Schema(
+        title = "Sort field",
+        description = """
+            Field to sort by: `TIMESTAMP_OPT`, `TIMESTAMP_SIGNUP` or `LAST_CHANGED`. Sent lower case to Mailchimp."""
+    )
     @PluginProperty(group = "advanced")
     private Property<SortField> sortField;
 
-    @Schema(title = "Sort direction", description = "`ASC` or `DESC`; Mailchimp only applies it together with `sortField`.")
+    @Schema(
+        title = "Sort direction",
+        description = """
+            `ASC` or `DESC`; Mailchimp only applies it together with `sortField`."""
+    )
     @PluginProperty(group = "advanced")
     private Property<SortDir> sortDir;
 
     @Schema(
         title = "Fields",
-        description = "Restrict the response to these Mailchimp fields, using Mailchimp's dotted syntax, e.g. `members.id`, `members.email_address`, `total_items`."
+        description = """
+            Restrict the response to these Mailchimp fields, using Mailchimp's dotted syntax, e.g. `members.id`, `members.email_address`, `total_items`."""
     )
     @PluginProperty(group = "advanced")
     private Property<List<String>> fields;
 
     @Schema(
         title = "Fetch strategy",
-        description = "`FETCH_ONE`: first member only.\n`FETCH` (default): all members in memory.\n`STORE`: write rows as ION to internal storage and return the URI.\n`NONE`: only count them."
+        description = """
+            `FETCH_ONE`: first member only.
+            `FETCH`: all members in memory.
+            `STORE` (default): write rows as ION to internal storage and return the URI.
+            `NONE`: only count them."""
     )
     @Builder.Default
     @PluginProperty(group = "processing")
-    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.STORE);
 
-    @Schema(title = "Max items", description = "Stop after this many members (default: unlimited). Must be at least 1. Use it to bound a huge audience.")
-    @PluginProperty(group = "advanced")
+    @Schema(
+        title = "Max items",
+        minimum = "1",
+        description = """
+            Stop after this many members (default: unlimited). Must be at least 1. Use it to bound a huge audience."""
+    )
+    @PluginProperty(group = "processing")
     private Property<Integer> maxItems;
 
     /** Member JSON to row; shared with the member triggers. */
@@ -121,7 +156,7 @@ public class ListMembers extends AbstractMailchimpTask implements RunnableTask<F
 
     @Override
     public FetchOutput run(RunContext runContext) throws Exception {
-        var rListId = runContext.render(listId).as(String.class).orElseThrow(() -> new IllegalArgumentException("'listId' is required"));
+        var rListId = MailchimpConnectionInterface.required(runContext, listId, "listId");
         var path = "/lists/" + MailchimpClient.segment(rListId) + "/members";
 
         var query = new LinkedHashMap<String, String>();
@@ -135,7 +170,7 @@ public class ListMembers extends AbstractMailchimpTask implements RunnableTask<F
         try (var client = client(runContext)) {
             return FetchOutput.fetchPaged(
                 runContext, client, path, query, "members",
-                runContext.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH),
+                runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE),
                 runContext.render(maxItems).as(Integer.class).orElse(null),
                 ListMembers::toRow
             );

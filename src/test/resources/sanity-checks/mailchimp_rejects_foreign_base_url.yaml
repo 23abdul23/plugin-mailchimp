@@ -1,0 +1,9 @@
+id: mailchimp_rejects_foreign_base_url
+namespace: sanitychecks.plugin-mailchimp
+
+tasks:
+  - id: ping
+    type: io.kestra.plugin.mailchimp.account.Ping
+    apiKey: "abc-us19"
+    baseUrl: "https://evil.example.com/3.0"
+    allowFailure: true

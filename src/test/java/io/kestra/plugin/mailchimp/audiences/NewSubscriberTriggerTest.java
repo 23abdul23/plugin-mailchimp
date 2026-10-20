@@ -16,6 +16,7 @@ import io.kestra.core.junit.annotations.KestraTest;
 import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.Trigger;
+import io.kestra.core.models.validations.ModelValidator;
 import io.kestra.core.runners.RunContextFactory;
 import io.kestra.core.storages.kv.KVMetadata;
 import io.kestra.core.storages.kv.KVValueAndMetadata;
@@ -27,6 +28,7 @@ import io.kestra.plugin.mailchimp.TriggerSupport.Row;
 import io.kestra.plugin.mailchimp.models.TriggerCursor;
 
 import jakarta.inject.Inject;
+import jakarta.validation.ConstraintViolationException;
 
 import static io.kestra.plugin.mailchimp.TriggerSupport.cursor;
 import static io.kestra.plugin.mailchimp.TriggerSupport.drain;
@@ -49,6 +51,9 @@ class NewSubscriberTriggerTest {
 
     @Inject
     private RunContextFactory runContextFactory;
+
+    @Inject
+    private ModelValidator modelValidator;
 
     private static String m(String id, String second) {
         return io.kestra.plugin.mailchimp.TriggerSupport.member(id, "timestamp_opt", "2026-01-01T10:00:" + second + "+00:00");
@@ -256,10 +261,17 @@ class NewSubscriberTriggerTest {
             var trigger = trigger(fake).interval(Duration.ofSeconds(10)).build();
             var ctx = ctx(trigger);
 
-            var e = assertThrows(IllegalArgumentException.class, () -> trigger.evaluate(ctx.getKey(), ctx.getValue()));
+            var e = assertThrows(ConstraintViolationException.class, () -> trigger.evaluate(ctx.getKey(), ctx.getValue()));
             assertThat(e.getMessage(), containsString("PT30S"));
-            assertThat(e.getMessage(), containsString("PT10S"));
             assertThat(trigger(fake).build().getInterval(), is(Duration.ofMinutes(5)));
+        }
+    }
+
+    @Test
+    void intervalBelowThirtySecondsIsRefusedWhenTheFlowIsSaved() throws Exception {
+        try (var fake = new FakeMailchimpServer()) {
+            assertThat(modelValidator.isValid(trigger(fake).interval(Duration.ofSeconds(10)).build()).isPresent(), is(true));
+            assertThat(modelValidator.isValid(trigger(fake).interval(Duration.ofSeconds(30)).build()).isPresent(), is(false));
         }
     }
 

@@ -8,6 +8,7 @@ import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
 
@@ -59,7 +60,11 @@ import lombok.experimental.SuperBuilder;
 public class SendCampaign extends AbstractMailchimpTask implements RunnableTask<SendCampaign.Output> {
     private static final int MAX_ITEMS_IN_MESSAGE = 10;
 
-    @Schema(title = "Campaign ID", description = "Mailchimp campaign id, found with `ListCampaigns`.")
+    @Schema(
+        title = "Campaign ID",
+        description = """
+            Mailchimp campaign id, found with `ListCampaigns`."""
+    )
     @NotNull
     @PluginProperty(group = "main")
     private Property<String> campaignId;
@@ -67,14 +72,15 @@ public class SendCampaign extends AbstractMailchimpTask implements RunnableTask<
     @Builder.Default
     @Schema(
         title = "Require a ready checklist",
-        description = "When true (default), the send checklist must report `is_ready` before sending. When false the checklist is not called and `checklistReady` is null in the output."
+        description = """
+            When true (default), the send checklist must report `is_ready` before sending. When false the checklist is not called and `checklistReady` is null in the output."""
     )
     @PluginProperty(group = "advanced")
     private Property<Boolean> requireReady = Property.ofValue(true);
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        var id = runContext.render(campaignId).as(String.class).orElseThrow(() -> new IllegalArgumentException("'campaignId' is required"));
+        var id = MailchimpConnectionInterface.required(runContext, campaignId, "campaignId");
         var segment = MailchimpClient.segment(id);
         var base = "/campaigns/" + segment;
         var check = runContext.render(requireReady).as(Boolean.class).orElse(true);
@@ -82,7 +88,7 @@ public class SendCampaign extends AbstractMailchimpTask implements RunnableTask<
         try (var client = client(runContext)) {
             Boolean ready = null;
             if (check) {
-                var checklist = client.send("GET", base + "/send-checklist", null, null);
+                var checklist = client.sendForBody("GET", base + "/send-checklist", null, null);
                 ready = checklist.path("is_ready").isBoolean() && checklist.path("is_ready").booleanValue();
                 if (!ready) {
                     throw new IllegalStateException("Campaign '" + id + "' is not ready to send, nothing was sent. " + describe(checklist.path("items")));
@@ -117,13 +123,25 @@ public class SendCampaign extends AbstractMailchimpTask implements RunnableTask<
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Campaign ID")
+        @Schema(
+            title = "Campaign ID",
+            description = """
+                Id of the campaign that was sent, as given in the input."""
+        )
         private final String campaignId;
 
-        @Schema(title = "Checklist ready", description = "Whether the send checklist was ready. Null when `requireReady` is false because the checklist was not called.")
+        @Schema(
+            title = "Checklist ready",
+            description = """
+                Whether the send checklist was ready. Null when `requireReady` is false because the checklist was not called."""
+        )
         private final Boolean checklistReady;
 
-        @Schema(title = "Sent", description = "True once Mailchimp accepted the send request.")
+        @Schema(
+            title = "Sent",
+            description = """
+                True once Mailchimp accepted the send request."""
+        )
         private final Boolean sent;
     }
 }

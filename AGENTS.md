@@ -38,8 +38,8 @@ plugin-mailchimp/
 
 ## Local rules
 
-- Base the wording on the implemented packages and classes.
-- Every input is a `Property<T>` rendered with `runContext.render`; secrets use `@PluginProperty(secret = true)` and `@ToString.Exclude`.
+- Base the wording on the implemented packages and classes, not on template README text.
+- Every task input is a `Property<T>` rendered with `runContext.render`; secrets use `@PluginProperty(secret = true)` and `@ToString.Exclude`.
 - No live credentials in tests or in the repo.
 - Build with JDK 21 to 23 (Lombok does not support newer JDKs yet). Run `./gradlew build` before pushing: it also lints the plugin docs.
 

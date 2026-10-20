@@ -1,0 +1,9 @@
+id: mailchimp_batch_subscribe_empty
+namespace: sanitychecks.plugin-mailchimp
+
+tasks:
+  - id: subscribe
+    type: io.kestra.plugin.mailchimp.audiences.BatchSubscribe
+    apiKey: "abc-us19"
+    listId: "a1b2c3d4e5"
+    from: []

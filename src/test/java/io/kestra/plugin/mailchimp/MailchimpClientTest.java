@@ -217,6 +217,27 @@ class MailchimpClientTest {
     }
 
     @Test
+    void emptyBodyPassesForPlainCallsButFailsWhereABodyIsRequired() throws Exception {
+        try (var fake = new FakeMailchimpServer(); var client = client(fake, 0)) {
+            fake.on("GET", "/3.0/ping", Response.empty(200));
+
+            assertThat(client.send("GET", "/ping", null, null).isNull(), equalTo(true));
+            var e = assertThrows(IllegalStateException.class, () -> client.sendForBody("GET", "/ping", null, null));
+            assertThat(e.getMessage(), containsString("Empty response from Mailchimp API on GET /ping"));
+        }
+    }
+
+    @Test
+    void notFoundSaysWhatToCheck() throws Exception {
+        try (var fake = new FakeMailchimpServer(); var client = client(fake, 0)) {
+            fake.on("GET", "/3.0/lists/x", Response.json(404, "{\"title\":\"Resource Not Found\",\"status\":404}"));
+
+            var e = assertThrows(MailchimpException.class, () -> client.send("GET", "/lists/x", null, null));
+            assertThat(e.getMessage(), containsString("Check 'listId' / 'campaignId'"));
+        }
+    }
+
+    @Test
     void invalidJsonOn2xxIsMailchimpException() throws Exception {
         try (var fake = new FakeMailchimpServer(); var client = client(fake, 0)) {
             fake.on("GET", "/3.0/ping", Response.json(200, "<html>secret-ish body</html>"));

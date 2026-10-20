@@ -2,7 +2,6 @@ package io.kestra.plugin.mailchimp.reports;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
-import java.util.Optional;
 import java.util.Set;
 
 import io.kestra.core.models.annotations.Example;
@@ -12,6 +11,7 @@ import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
 import io.kestra.plugin.mailchimp.models.FetchOutput;
@@ -60,18 +60,27 @@ import lombok.experimental.SuperBuilder;
 public class ListEmailActivity extends AbstractMailchimpTask implements RunnableTask<FetchOutput> {
     private static final Set<String> CAMEL = Set.of("email_address", "email_id");
 
-    @Schema(title = "Campaign ID", description = "Id of a sent campaign, as returned by `ListCampaigns`.")
+    @Schema(
+        title = "Campaign ID",
+        description = """
+            Id of a sent campaign, as returned by `ListCampaigns`."""
+    )
     @NotNull
     @PluginProperty(group = "main")
     private Property<String> campaignId;
 
-    @Schema(title = "Since", description = "Only activity after this ISO-8601 date and time (`since`).")
+    @Schema(
+        title = "Since",
+        description = """
+            Only activity after this ISO-8601 date and time (`since`)."""
+    )
     @PluginProperty(group = "processing")
     private Property<Instant> since;
 
     @Schema(
         title = "Filter bots",
-        description = "Excludes bot activity via the API's `filter_bots` parameter (sent only when `true`). Default `false`."
+        description = """
+            Excludes bot activity via the API's `filter_bots` parameter (sent only when `true`). Default `false`."""
     )
     @Builder.Default
     @PluginProperty(group = "processing")
@@ -79,19 +88,28 @@ public class ListEmailActivity extends AbstractMailchimpTask implements Runnable
 
     @Schema(
         title = "Fetch strategy",
-        description = "`FETCH_ONE`: first recipient only.\n`FETCH` (default): all recipients in memory.\n`STORE`: write rows as ION to internal storage and return the URI.\n`NONE`: only count them."
+        description = """
+            `FETCH_ONE`: first recipient only.
+            `FETCH`: all recipients in memory.
+            `STORE` (default): write rows as ION to internal storage and return the URI.
+            `NONE`: only count them."""
     )
     @Builder.Default
     @PluginProperty(group = "processing")
-    private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
+    private Property<FetchType> fetchType = Property.ofValue(FetchType.STORE);
 
-    @Schema(title = "Max items", description = "Stop after this many recipients (default: unlimited). Must be at least 1.")
-    @PluginProperty(group = "advanced")
+    @Schema(
+        title = "Max items",
+        minimum = "1",
+        description = """
+            Stop after this many recipients (default: unlimited). Must be at least 1."""
+    )
+    @PluginProperty(group = "processing")
     private Property<Integer> maxItems;
 
     @Override
     public FetchOutput run(RunContext runContext) throws Exception {
-        var rCampaignId = runContext.render(campaignId).as(String.class).orElseThrow(() -> new IllegalArgumentException("'campaignId' is required"));
+        var rCampaignId = MailchimpConnectionInterface.required(runContext, campaignId, "campaignId");
         var path = "/reports/" + MailchimpClient.segment(rCampaignId) + "/email-activity";
 
         var query = new LinkedHashMap<String, String>();
@@ -101,7 +119,7 @@ public class ListEmailActivity extends AbstractMailchimpTask implements Runnable
         try (var client = client(runContext)) {
             return FetchOutput.fetchPaged(
                 runContext, client, path, query, "emails",
-                runContext.render(fetchType).as(FetchType.class).orElse(FetchType.FETCH),
+                runContext.render(fetchType).as(FetchType.class).orElse(FetchType.STORE),
                 runContext.render(maxItems).as(Integer.class).orElse(null),
                 item -> FetchOutput.row(item, CAMEL)
             );

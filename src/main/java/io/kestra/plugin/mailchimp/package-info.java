@@ -1,7 +1,7 @@
 @PluginSubGroup(
     title = "Mailchimp",
-    description = "Mailchimp plugin for Kestra",
-    categories = PluginSubGroup.PluginCategory.DATA
+    description = "Tasks that connect Kestra workflows to Mailchimp.",
+    categories = {PluginSubGroup.PluginCategory.BUSINESS}
 )
 package io.kestra.plugin.mailchimp;
 

@@ -14,6 +14,7 @@ import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 
 import jakarta.inject.Inject;
+import jakarta.validation.ConstraintViolationException;
 
 import static io.kestra.plugin.mailchimp.TriggerSupport.cursor;
 import static io.kestra.plugin.mailchimp.TriggerSupport.ids;
@@ -141,7 +142,7 @@ class CampaignSentTriggerTest {
             var trigger = trigger(fake).interval(Duration.ofSeconds(1)).build();
             var ctx = TestsUtils.mockTrigger(runContextFactory, trigger);
 
-            assertThrows(IllegalArgumentException.class, () -> trigger.evaluate(ctx.getKey(), ctx.getValue()));
+            assertThrows(ConstraintViolationException.class, () -> trigger.evaluate(ctx.getKey(), ctx.getValue()));
         }
     }
 }

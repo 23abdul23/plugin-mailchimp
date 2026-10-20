@@ -62,7 +62,11 @@ import lombok.experimental.SuperBuilder;
 public class MemberStatusChangeTrigger extends AbstractMemberTrigger {
     public enum Status { SUBSCRIBED, UNSUBSCRIBED, CLEANED, PENDING, TRANSACTIONAL }
 
-    @Schema(title = "Status", description = "Fire for members that now have this status (sent lower case, e.g. `unsubscribed`).")
+    @Schema(
+        title = "Status",
+        description = """
+            Fire for members that now have this status: `SUBSCRIBED`, `UNSUBSCRIBED`, `CLEANED`, `PENDING` or `TRANSACTIONAL`. Sent lower case to Mailchimp."""
+    )
     @NotNull
     @PluginProperty(group = "main")
     private Property<Status> status;

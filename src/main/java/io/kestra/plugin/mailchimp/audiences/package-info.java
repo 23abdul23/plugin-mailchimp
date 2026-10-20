@@ -1,6 +1,6 @@
 @PluginSubGroup(
     title = "Mailchimp Audiences",
-    description = "Tasks and triggers for Mailchimp audiences and members.",
+    description = "Tasks and triggers that list, add, tag and watch audience members in Mailchimp.",
     categories = {PluginSubGroup.PluginCategory.BUSINESS}
 )
 package io.kestra.plugin.mailchimp.audiences;

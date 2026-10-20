@@ -18,4 +18,4 @@ src/test/resources/application-test.yml
 bin/
 .env
 .env.local
-.superpowers/
+docker-compose.override.yml

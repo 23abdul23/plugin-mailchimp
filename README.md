@@ -102,8 +102,6 @@ Optional tests in `io.kestra.plugin.mailchimp.integration` call the real Mailchi
 
 Cleanup uses `DELETE`, which only archives members: they are not permanently deleted, and tags or audience stats may keep residual test data. Mailchimp rejects `example.com`, `example.org` and `example.net` ("looks fake" / "not a valid email address"; checked against a live account), so set `MAILCHIMP_TEST_EMAIL_DOMAIN` to a domain that has MX records and ideally one you control; members are only ever written as `unsubscribed`, so nothing is mailed.
 
-Observed against a live account: `since_last_changed` / `since_timestamp_opt` are exclusive (a member whose timestamp equals the filter is not returned) with whole-second precision and `+00:00` offsets, which is why the triggers re-read one second and de-duplicate by member id. Mailchimp ignores the `X-Trigger-Error` header on `/ping` and `/lists`, so the error mapping tests use naturally failing requests (bad key 401, unknown audience 404, malformed `since_last_changed` 400); 403 and `Retry-After` on 429 could not be observed and are covered by unit tests only. `filter_bots` is accepted by `/reports/{id}/email-activity`, its filtering effect could not be observed (the sandbox campaign has no bot opens).
-
 The `Integration tests` GitHub workflow runs the same command on manual dispatch, reading the same names from repository secrets.
 
 ## Running Kestra locally with this plugin
@@ -111,7 +109,17 @@ The `Integration tests` GitHub workflow runs the same command on manual dispatch
 1. Build the plugin: `./gradlew build` (or `./gradlew shadowJar`). The jar lands in `build/libs/`.
 2. Run `docker compose up`. `docker-compose.yml` builds the Kestra image from `Dockerfile` and mounts `build/libs/` to `/app/plugins/`, so Kestra picks up the jar on startup.
 3. Kestra UI is available at [localhost:8080](http://localhost:8080).
-4. `{{ secret('MAILCHIMP_API_KEY') }}` reads the environment variable `SECRET_MAILCHIMP_API_KEY`, whose value is the base64 of the key, without a trailing newline: `printf '%s' "$KEY" | base64`. `docker-compose.yml` passes your git-ignored `.env` (copied from `.env.example`) to the container, so every `SECRET_*` variable in it becomes a Kestra secret (compose v2.24 or newer; without a `.env` the container starts without them).
+4. `{{ secret('MAILCHIMP_API_KEY') }}` reads the environment variable `SECRET_MAILCHIMP_API_KEY`, whose value is the base64 of the key, without a trailing newline: `printf '%s' "$KEY" | base64`. To pass your git-ignored `.env` (copied from `.env.example`) to the container, add a git-ignored `docker-compose.override.yml` next to `docker-compose.yml`; compose loads it automatically:
+
+   ```yaml
+   services:
+     app:
+       env_file:
+         - path: .env
+           required: false
+   ```
+
+   Every `SECRET_*` variable in `.env` then becomes a Kestra secret (compose v2.24 or newer).
 
 ### Plugins folder gotcha
 

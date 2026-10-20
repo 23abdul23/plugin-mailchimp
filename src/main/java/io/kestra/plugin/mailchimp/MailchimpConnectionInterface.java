@@ -14,6 +14,7 @@ import io.kestra.core.runners.RunContext;
  */
 public interface MailchimpConnectionInterface {
     Pattern SERVER = Pattern.compile("^[a-z]{2,6}[0-9]{1,3}$");
+    int MAX_RETRIES = 10;
 
     Property<String> getApiKey();
 
@@ -34,8 +35,20 @@ public interface MailchimpConnectionInterface {
         if (maxRetries < 0) {
             throw new IllegalArgumentException("'maxRetries' must be >= 0");
         }
+        if (maxRetries > MAX_RETRIES) {
+            throw new IllegalArgumentException("'maxRetries' must be <= " + MAX_RETRIES);
+        }
         var timeout = runContext.render(connection.getTimeout()).as(Duration.class).orElse(Duration.ofSeconds(120));
+        if (timeout.isZero() || timeout.isNegative()) {
+            throw new IllegalArgumentException("'timeout' must be positive");
+        }
         return new MailchimpClient(runContext, baseUrl, token, maxRetries, timeout, Thread::sleep);
+    }
+
+    /** Renders a required text property; a blank value fails with a message that names the property. */
+    static String required(RunContext runContext, Property<String> property, String name) throws Exception {
+        return runContext.render(property).as(String.class).filter(s -> !s.isBlank())
+            .orElseThrow(() -> new IllegalArgumentException("'" + name + "' is required and must not be blank"));
     }
 
     private static String token(RunContext runContext, MailchimpConnectionInterface connection) throws Exception {
@@ -91,7 +104,8 @@ public interface MailchimpConnectionInterface {
             .or(() -> apiKey.filter(k -> k.contains("-")).map(k -> k.substring(k.lastIndexOf('-') + 1)))
             .orElseThrow(() -> new IllegalArgumentException("'server' is required: use an apiKey ending in '-<data center>' (for example '-us19') or set 'server' (see https://login.mailchimp.com/oauth2/metadata for OAuth tokens)"));
         if (!SERVER.matcher(server).matches()) {
-            throw new IllegalArgumentException("Invalid 'server' '" + server + "': expected a Mailchimp data center such as 'us19'");
+            // never echo a value taken from the key: a key without a data center suffix is all secret
+            throw new IllegalArgumentException("'apiKey' does not end in a valid data center suffix (such as '-us19'); set 'server' explicitly");
         }
         return "https://" + server + ".api.mailchimp.com/3.0";
     }

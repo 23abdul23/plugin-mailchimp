@@ -1,6 +1,6 @@
 @PluginSubGroup(
     title = "Mailchimp Account",
-    description = "Tasks for checking the connection to a Mailchimp account.",
+    description = "Tasks that check the connection to a Mailchimp account.",
     categories = {PluginSubGroup.PluginCategory.BUSINESS}
 )
 package io.kestra.plugin.mailchimp.account;

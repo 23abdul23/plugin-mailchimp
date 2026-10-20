@@ -79,7 +79,11 @@ public final class CursorPoll {
         var flowId = context.getFlowId();
         var triggerId = context.getTriggerId();
         var key = "mailchimp_" + spec.kind() + "_" + flowId.length() + "_" + flowId + "_" + triggerId.length() + "_" + triggerId + "_" + spec.scope();
-        var stored = kv.getValue(key).map(KVValue::value).flatMap(v -> TriggerCursor.tryParse(String.valueOf(v)));
+        var raw = kv.getValue(key).map(KVValue::value).map(String::valueOf);
+        var stored = raw.flatMap(TriggerCursor::tryParse);
+        if (raw.isPresent() && stored.isEmpty()) {
+            logger.warn("Stored cursor in KV key '{}' cannot be read: restarting from the current position, events since the last valid poll are skipped", key);
+        }
 
         if (stored.isEmpty()) {
             var query = new LinkedHashMap<>(spec.query());

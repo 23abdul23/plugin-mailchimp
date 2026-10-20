@@ -11,6 +11,7 @@ import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
 import io.kestra.plugin.mailchimp.models.SubscriberHash;
@@ -64,29 +65,45 @@ import lombok.experimental.SuperBuilder;
 public class UpdateMemberTags extends AbstractMailchimpTask implements RunnableTask<UpdateMemberTags.Output> {
     private static final Set<String> STATUSES = Set.of("active", "inactive");
 
-    @Schema(title = "Audience ID", description = "Mailchimp audience (list) id, found in the audience settings or with `ListAudiences`.")
+    @Schema(
+        title = "Audience ID",
+        description = """
+            Mailchimp audience (list) id, found in the audience settings or with `ListAudiences`."""
+    )
     @NotNull
     @PluginProperty(group = "main")
     private Property<String> listId;
 
-    @Schema(title = "Email address", description = "Member email. Trimmed and lower-cased before it is hashed.")
+    @Schema(
+        title = "Email address",
+        description = """
+            Member email. Trimmed and lower-cased before it is hashed."""
+    )
     @NotNull
     @PluginProperty(group = "main")
     private Property<String> email;
 
-    @Schema(title = "Tags", description = "Tag changes, at least one. Each has a `name` and a `status` of `active` or `inactive`.")
+    @Schema(
+        title = "Tags",
+        description = """
+            Tag changes, at least one. Each has a `name` and a `status` of `active` or `inactive`."""
+    )
     @NotNull
     @PluginProperty(group = "main")
     private Property<List<Tag>> tags;
 
-    @Schema(title = "Sync tags", description = "When true, the member's tags become exactly the `active` ones (`is_syncing`). Not sent when unset.")
+    @Schema(
+        title = "Sync tags",
+        description = """
+            When true, the member's tags become exactly the `active` ones (`is_syncing`). Not sent when unset."""
+    )
     @PluginProperty(group = "advanced")
     private Property<Boolean> isSyncing;
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        var rListId = runContext.render(listId).as(String.class).orElseThrow(() -> new IllegalArgumentException("'listId' is required"));
-        var hash = SubscriberHash.of(runContext.render(email).as(String.class).orElseThrow(() -> new IllegalArgumentException("'email' is required")));
+        var rListId = MailchimpConnectionInterface.required(runContext, listId, "listId");
+        var hash = SubscriberHash.of(MailchimpConnectionInterface.required(runContext, email, "email"));
         var rTags = runContext.render(tags).asList(Tag.class);
         if (rTags.isEmpty()) {
             throw new IllegalArgumentException("'tags' must contain at least one tag");
@@ -117,17 +134,29 @@ public class UpdateMemberTags extends AbstractMailchimpTask implements RunnableT
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Tag {
-        @Schema(title = "Tag name", description = "Name of the tag; it is created when it does not exist yet.")
+        @Schema(
+            title = "Tag name",
+            description = """
+                Name of the tag; it is created when it does not exist yet."""
+        )
         private String name;
 
-        @Schema(title = "Tag status", description = "`active` adds the tag, `inactive` removes it.")
+        @Schema(
+            title = "Tag status",
+            description = """
+                `active` adds the tag, `inactive` removes it."""
+        )
         private String status;
     }
 
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Applied tags", description = "Tag changes sent to Mailchimp, with normalized status.")
+        @Schema(
+            title = "Applied tags",
+            description = """
+                Tag changes sent to Mailchimp, with normalized status."""
+        )
         private final List<Tag> applied;
     }
 }

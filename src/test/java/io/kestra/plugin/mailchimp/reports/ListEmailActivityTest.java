@@ -20,6 +20,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.is;
+import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -43,7 +44,21 @@ class ListEmailActivityTest {
         return ListEmailActivity.builder()
             .apiKey(Property.ofValue("abc-us19"))
             .baseUrl(Property.ofValue(fake.baseUrl()))
-            .campaignId(Property.ofValue("c1"));
+            .campaignId(Property.ofValue("c1"))
+            .fetchType(Property.ofValue(FetchType.FETCH));
+    }
+
+    @Test
+    void storesByDefault() throws Exception {
+        try (var fake = new FakeMailchimpServer()) {
+            fake.on("GET", PATH, Response.json(200, BODY));
+
+            var out = ListEmailActivity.builder().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue(fake.baseUrl()))
+                .campaignId(Property.ofValue("c1")).build().run(runContextFactory.of());
+
+            assertThat(out.getRows(), nullValue());
+            assertThat(out.getUri(), notNullValue());
+        }
     }
 
     @Test

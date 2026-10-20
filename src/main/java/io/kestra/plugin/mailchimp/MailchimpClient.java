@@ -14,6 +14,8 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
+import org.slf4j.Logger;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.NullNode;
 
@@ -55,6 +57,7 @@ public class MailchimpClient implements Closeable {
     private final String baseUrl;
     private final int maxRetries;
     private final Sleeper sleeper;
+    private final Logger logger;
 
     public MailchimpClient(RunContext runContext, String baseUrl, String token, int maxRetries, Duration timeout, Sleeper sleeper) throws Exception {
         if (token.chars().anyMatch(c -> c < 0x21 || c == 0x7f)) {
@@ -64,6 +67,7 @@ public class MailchimpClient implements Closeable {
         this.baseUrl = baseUrl;
         this.maxRetries = maxRetries;
         this.sleeper = sleeper;
+        this.logger = runContext.logger();
         this.http = HttpClient.builder()
             .runContext(runContext)
             .configuration(HttpConfiguration.builder()
@@ -94,7 +98,7 @@ public class MailchimpClient implements Closeable {
                     throw e;
                 }
                 if (retryable && attempt < maxRetries) {
-                    sleeper.sleep(delay(attempt, null));
+                    backoff(method, path, "I/O error: " + e.getMessage(), attempt, null);
                     continue;
                 }
                 throw new IOException(e.getMessage(), e);
@@ -105,15 +109,33 @@ public class MailchimpClient implements Closeable {
                 try {
                     return parse(response.getBody());
                 } catch (IOException e) {
-                    throw new MailchimpException(status, "Invalid JSON response", null, null);
+                    var failure = new MailchimpException(status, "Invalid JSON response", "Mailchimp returned a non-JSON body for " + method + " " + path + "; check 'baseUrl' and the proxy settings", null);
+                    failure.initCause(e);
+                    throw failure;
                 }
             }
             if (attempt < maxRetries && (status == 429 || (status >= 500 && retryable))) {
-                sleeper.sleep(delay(attempt, response.getHeaders().firstValue("Retry-After").orElse(null)));
+                backoff(method, path, "HTTP " + status, attempt, response.getHeaders().firstValue("Retry-After").orElse(null));
                 continue;
             }
             throw error(status, response);
         }
+    }
+
+    /** Sleeps before the next attempt and says so in the logs, so a throttled task does not look hung. */
+    private void backoff(String method, String path, String cause, int attempt, String retryAfter) throws InterruptedException {
+        var wait = delay(attempt, retryAfter);
+        logger.warn("Mailchimp {} {} failed ({}), retry {}/{} in {} ms", method, path, cause, attempt + 1, maxRetries, wait.toMillis());
+        sleeper.sleep(wait);
+    }
+
+    /** Like {@link #send} for calls that must answer with a body: an empty 2xx answer fails instead of passing as success. */
+    public JsonNode sendForBody(String method, String path, Map<String, String> query, Object body) throws Exception {
+        var response = send(method, path, query, body);
+        if (response.isMissingNode() || response.isNull()) {
+            throw new IllegalStateException("Empty response from Mailchimp API on " + method + " " + path + "; check 'baseUrl' and the proxy settings");
+        }
+        return response;
     }
 
     /**
@@ -252,6 +274,10 @@ public class MailchimpClient implements Closeable {
             detail = "Mailchimp credentials invalid or revoked" + (detail == null || detail.isBlank() ? "" : " (" + detail + ")");
         } else if (status >= 300 && status < 400) {
             detail = "redirect to '" + response.getHeaders().firstValue("Location").orElse("?") + "' not followed";
+        } else if (status == 403) {
+            detail = (detail == null || detail.isBlank() ? "" : detail + ". ") + "Check the key's account and permissions";
+        } else if (status == 404) {
+            detail = (detail == null || detail.isBlank() ? "" : detail + ". ") + "Check 'listId' / 'campaignId' and that the key belongs to the same account";
         }
         return new MailchimpException(status, title, detail, fields);
     }

@@ -66,7 +66,11 @@ public class ListAudiences extends AbstractMailchimpTask implements RunnableTask
 
     @Schema(
         title = "Fetch strategy",
-        description = "`FETCH_ONE`: first audience only.\n`FETCH` (default): all audiences in memory.\n`STORE`: write rows as ION to internal storage and return the URI.\n`NONE`: only count them."
+        description = """
+            `FETCH_ONE`: first audience only.
+            `FETCH` (default): all audiences in memory.
+            `STORE`: write rows as ION to internal storage and return the URI.
+            `NONE`: only count them."""
     )
     @Builder.Default
     @PluginProperty(group = "processing")
@@ -74,39 +78,62 @@ public class ListAudiences extends AbstractMailchimpTask implements RunnableTask
 
     @Schema(
         title = "Page size",
-        description = "Rows per request. When `count` or `offset` is set the task does a single request and does not paginate; otherwise it pages with 1000 per request."
+        minimum = "1",
+        maximum = "1000",
+        description = """
+            Rows per request. When `count` or `offset` is set the task does a single request and does not paginate; otherwise it pages with 1000 per request."""
     )
     @PluginProperty(group = "advanced")
     private Property<Integer> count;
 
     @Schema(
         title = "Offset",
-        description = "Rows to skip. When `count` or `offset` is set the task does a single request and does not paginate."
+        minimum = "0",
+        description = """
+            Rows to skip. When `count` or `offset` is set the task does a single request and does not paginate."""
     )
     @PluginProperty(group = "advanced")
     private Property<Integer> offset;
 
-    @Schema(title = "Created since", description = "Only audiences created after this ISO-8601 date and time (sent as `since_date_created`).")
+    @Schema(
+        title = "Created since",
+        description = """
+            Only audiences created after this ISO-8601 date and time (sent as `since_date_created`)."""
+    )
     @PluginProperty(group = "processing")
     private Property<Instant> sinceDateCreated;
 
-    @Schema(title = "Created before", description = "Only audiences created before this ISO-8601 date and time (sent as `before_date_created`).")
+    @Schema(
+        title = "Created before",
+        description = """
+            Only audiences created before this ISO-8601 date and time (sent as `before_date_created`)."""
+    )
     @PluginProperty(group = "processing")
     private Property<Instant> beforeDateCreated;
 
-    @Schema(title = "Include total contacts", description = "Also ask Mailchimp for the total contact count of each audience (`include_total_contacts`).")
+    @Schema(
+        title = "Include total contacts",
+        description = """
+            Also ask Mailchimp for the total contact count of each audience (`include_total_contacts`)."""
+    )
     @PluginProperty(group = "processing")
     private Property<Boolean> includeTotalContacts;
 
     @Schema(
         title = "Fields",
-        description = "Restrict the response to these Mailchimp fields, using Mailchimp's dotted syntax, e.g. `lists.id`, `lists.name`, `total_items`."
+        description = """
+            Restrict the response to these Mailchimp fields, using Mailchimp's dotted syntax, e.g. `lists.id`, `lists.name`, `total_items`."""
     )
     @PluginProperty(group = "advanced")
     private Property<List<String>> fields;
 
-    @Schema(title = "Max items", description = "Stop after this many audiences (default: unlimited). Must be at least 1.")
-    @PluginProperty(group = "advanced")
+    @Schema(
+        title = "Max items",
+        minimum = "1",
+        description = """
+            Stop after this many audiences (default: unlimited). Must be at least 1."""
+    )
+    @PluginProperty(group = "processing")
     private Property<Integer> maxItems;
 
     @Override

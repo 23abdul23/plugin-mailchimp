@@ -90,7 +90,6 @@ class CoreIntegrationTest extends MailchimpIntegrationBase {
             .statusIfNew(Property.ofValue(UpsertMember.Status.UNSUBSCRIBED))
             .build().run(runContextFactory.of());
         assertThat(upserted.getEmailAddress(), equalTo(email));
-        assertThat(upserted.getSubscriberHash(), equalTo(SubscriberHash.of(email)));
 
         var rows = eventually("member listed after upsert", () -> listMembers(since), r -> r.stream().anyMatch(x -> email.equals(x.get("emailAddress"))));
         var row = rows.stream().filter(r -> email.equals(r.get("emailAddress"))).findFirst().orElseThrow();
@@ -129,7 +128,7 @@ class CoreIntegrationTest extends MailchimpIntegrationBase {
         URI uri = runContext.storage().putFile(file.toFile());
 
         var out = BatchSubscribe.builder().apiKey(apiKeyProperty()).server(serverProperty())
-            .listId(Property.ofValue(listId())).from(Property.ofValue(uri.toString()))
+            .listId(Property.ofValue(listId())).from(uri.toString())
             .build().run(runContext);
 
         assertThat(out.getErrorCount(), is(0L));

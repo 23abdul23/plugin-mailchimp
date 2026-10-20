@@ -71,45 +71,79 @@ public class ListCampaigns extends AbstractMailchimpTask implements RunnableTask
 
     @Schema(
         title = "Campaign type",
-        description = "Only campaigns of this type (sent lower case as `type`, e.g. `regular`). Named `campaignType` because `type` is the task type in a flow."
+        description = """
+            Only campaigns of this type: `REGULAR`, `PLAINTEXT`, `ABSPLIT`, `RSS` or `VARIATE` (sent lower case as `type`). Named `campaignType` because `type` is the task type in a flow."""
     )
     @PluginProperty(group = "processing")
     private Property<Type> campaignType;
 
-    @Schema(title = "Status", description = "Only campaigns with this status (sent lower case, e.g. `sent`).")
+    @Schema(
+        title = "Status",
+        description = """
+            Only campaigns with this status: `SAVE`, `PAUSED`, `SCHEDULE`, `SENDING` or `SENT`. Sent lower case to Mailchimp."""
+    )
     @PluginProperty(group = "processing")
     private Property<Status> status;
 
-    @Schema(title = "Sent since", description = "Only campaigns sent after this ISO-8601 date and time (`since_send_time`).")
+    @Schema(
+        title = "Sent since",
+        description = """
+            Only campaigns sent after this ISO-8601 date and time (`since_send_time`)."""
+    )
     @PluginProperty(group = "processing")
     private Property<Instant> sinceSendTime;
 
-    @Schema(title = "Sent before", description = "Only campaigns sent before this ISO-8601 date and time (`before_send_time`).")
+    @Schema(
+        title = "Sent before",
+        description = """
+            Only campaigns sent before this ISO-8601 date and time (`before_send_time`)."""
+    )
     @PluginProperty(group = "processing")
     private Property<Instant> beforeSendTime;
 
-    @Schema(title = "Audience ID", description = "Only campaigns sent to this audience (`list_id`).")
+    @Schema(
+        title = "Audience ID",
+        description = """
+            Only campaigns sent to this audience (`list_id`)."""
+    )
     @PluginProperty(group = "processing")
     private Property<String> listId;
 
-    @Schema(title = "Sort field", description = "Field to sort by (sent lower case, e.g. `send_time`).")
+    @Schema(
+        title = "Sort field",
+        description = """
+            Field to sort by: `CREATE_TIME` or `SEND_TIME`. Sent lower case to Mailchimp."""
+    )
     @PluginProperty(group = "advanced")
     private Property<SortField> sortField;
 
-    @Schema(title = "Sort direction", description = "`ASC` or `DESC`; Mailchimp only applies it together with `sortField`.")
+    @Schema(
+        title = "Sort direction",
+        description = """
+            `ASC` or `DESC`; Mailchimp only applies it together with `sortField`."""
+    )
     @PluginProperty(group = "advanced")
     private Property<SortDir> sortDir;
 
     @Schema(
         title = "Fetch strategy",
-        description = "`FETCH_ONE`: first campaign only.\n`FETCH` (default): all campaigns in memory.\n`STORE`: write rows as ION to internal storage and return the URI.\n`NONE`: only count them."
+        description = """
+            `FETCH_ONE`: first campaign only.
+            `FETCH` (default): all campaigns in memory.
+            `STORE`: write rows as ION to internal storage and return the URI.
+            `NONE`: only count them."""
     )
     @Builder.Default
     @PluginProperty(group = "processing")
     private Property<FetchType> fetchType = Property.ofValue(FetchType.FETCH);
 
-    @Schema(title = "Max items", description = "Stop after this many campaigns (default: unlimited). Must be at least 1.")
-    @PluginProperty(group = "advanced")
+    @Schema(
+        title = "Max items",
+        minimum = "1",
+        description = """
+            Stop after this many campaigns (default: unlimited). Must be at least 1."""
+    )
+    @PluginProperty(group = "processing")
     private Property<Integer> maxItems;
 
     /** Campaign JSON to row; shared with {@link CampaignSentTrigger}. */

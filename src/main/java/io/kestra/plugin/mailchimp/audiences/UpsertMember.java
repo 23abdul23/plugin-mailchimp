@@ -11,6 +11,7 @@ import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
+import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
 import io.kestra.plugin.mailchimp.models.SubscriberHash;
@@ -66,49 +67,85 @@ import lombok.experimental.SuperBuilder;
 public class UpsertMember extends AbstractMailchimpTask implements RunnableTask<UpsertMember.Output> {
     public enum Status { SUBSCRIBED, UNSUBSCRIBED, CLEANED, PENDING, TRANSACTIONAL }
 
-    @Schema(title = "Audience ID", description = "Mailchimp audience (list) id, found in the audience settings or with `ListAudiences`.")
+    @Schema(
+        title = "Audience ID",
+        description = """
+            Mailchimp audience (list) id, found in the audience settings or with `ListAudiences`."""
+    )
     @NotNull
     @PluginProperty(group = "main")
     private Property<String> listId;
 
-    @Schema(title = "Email address", description = "Contact email. Trimmed and sent as given; only the subscriber hash uses the lower-cased form.")
+    @Schema(
+        title = "Email address",
+        description = """
+            Contact email. Trimmed and sent as given; only the subscriber hash uses the lower-cased form."""
+    )
     @NotNull
     @PluginProperty(group = "main")
     private Property<String> email;
 
-    @Schema(title = "Status if new", description = "Status given when the member does not exist yet (`pending` sends a double opt-in email).")
+    @Schema(
+        title = "Status if new",
+        description = """
+            Status given when the member does not exist yet: `SUBSCRIBED`, `UNSUBSCRIBED`, `CLEANED`, `PENDING` or `TRANSACTIONAL`. `PENDING` sends a double opt-in email."""
+    )
     @NotNull
     @PluginProperty(group = "main")
     private Property<Status> statusIfNew;
 
-    @Schema(title = "Status", description = "New status for the member, also applied to an existing member. Not sent when unset.")
+    @Schema(
+        title = "Status",
+        description = """
+            New status for the member, also applied to an existing member: `SUBSCRIBED`, `UNSUBSCRIBED`, `CLEANED`, `PENDING` or `TRANSACTIONAL`. Not sent when unset."""
+    )
     @PluginProperty(group = "processing")
     private Property<Status> status;
 
-    @Schema(title = "Merge fields", description = "Merge field values by tag, e.g. `FNAME: Jane`.")
+    @Schema(
+        title = "Merge fields",
+        description = """
+            Merge field values by tag, e.g. `FNAME: Jane`."""
+    )
     @PluginProperty(group = "processing")
     private Property<Map<String, Object>> mergeFields;
 
-    @Schema(title = "Tags", description = "Tag names to apply to the member.")
+    @Schema(
+        title = "Tags",
+        description = """
+            Tag names to apply to the member."""
+    )
     @PluginProperty(group = "processing")
     private Property<List<String>> tags;
 
-    @Schema(title = "Language", description = "Subscriber language code such as `en` or `fr`.")
+    @Schema(
+        title = "Language",
+        description = """
+            Subscriber language code such as `en` or `fr`."""
+    )
     @PluginProperty(group = "processing")
     private Property<String> language;
 
-    @Schema(title = "VIP", description = "Mark the member as VIP.")
+    @Schema(
+        title = "VIP",
+        description = """
+            Mark the member as VIP."""
+    )
     @PluginProperty(group = "processing")
     private Property<Boolean> vip;
 
-    @Schema(title = "Skip merge validation", description = "Accept the member even when required merge fields are missing (`skip_merge_validation`).")
+    @Schema(
+        title = "Skip merge validation",
+        description = """
+            Accept the member even when required merge fields are missing (`skip_merge_validation`)."""
+    )
     @PluginProperty(group = "advanced")
     private Property<Boolean> skipMergeValidation;
 
     @Override
     public Output run(RunContext runContext) throws Exception {
-        var rListId = runContext.render(listId).as(String.class).orElseThrow(() -> new IllegalArgumentException("'listId' is required"));
-        var rEmail = runContext.render(email).as(String.class).orElseThrow(() -> new IllegalArgumentException("'email' is required")).trim();
+        var rListId = MailchimpConnectionInterface.required(runContext, listId, "listId");
+        var rEmail = MailchimpConnectionInterface.required(runContext, email, "email").trim();
         var hash = SubscriberHash.of(rEmail.toLowerCase(Locale.ROOT));
         var rStatusIfNew = runContext.render(statusIfNew).as(Status.class).orElseThrow(() -> new IllegalArgumentException("'statusIfNew' is required"));
 
@@ -131,11 +168,10 @@ public class UpsertMember extends AbstractMailchimpTask implements RunnableTask<
         runContext.render(skipMergeValidation).as(Boolean.class).filter(Boolean::booleanValue).ifPresent(v -> query.put("skip_merge_validation", "true"));
 
         try (var client = client(runContext)) {
-            var response = client.send("PUT", "/lists/" + MailchimpClient.segment(rListId) + "/members/" + MailchimpClient.segment(hash), query, body);
+            var response = client.sendForBody("PUT", "/lists/" + MailchimpClient.segment(rListId) + "/members/" + MailchimpClient.segment(hash), query, body);
             return Output.builder()
                 .id(response.path("id").asText(hash))
                 .emailAddress(response.path("email_address").asText(rEmail))
-                .subscriberHash(hash)
                 .status(response.path("status").asText(null))
                 .build();
         }
@@ -144,16 +180,25 @@ public class UpsertMember extends AbstractMailchimpTask implements RunnableTask<
     @Builder
     @Getter
     public static class Output implements io.kestra.core.models.tasks.Output {
-        @Schema(title = "Member ID", description = "Mailchimp member id (the subscriber hash).")
+        @Schema(
+            title = "Member ID",
+            description = """
+                Mailchimp member id (the subscriber hash)."""
+        )
         private final String id;
 
-        @Schema(title = "Email address", description = "Email address as stored by Mailchimp.")
+        @Schema(
+            title = "Email address",
+            description = """
+                Email address as stored by Mailchimp."""
+        )
         private final String emailAddress;
 
-        @Schema(title = "Subscriber hash", description = "MD5 of the lower-cased email, used as member id in the API.")
-        private final String subscriberHash;
-
-        @Schema(title = "Status", description = "Member status after the call, e.g. `subscribed` or `pending`.")
+        @Schema(
+            title = "Status",
+            description = """
+                Member status after the call, e.g. `subscribed` or `pending`."""
+        )
         private final String status;
     }
 }
