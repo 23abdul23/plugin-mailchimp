@@ -104,12 +104,22 @@ class MailchimpConnectionTest {
     }
 
     @Test
-    void baseUrlMustBeHttpsOrLocalhost() throws Exception {
-        var bad = task().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue("http://example.com")).build();
-        var good = task().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue("http://localhost:1234")).build();
+    void loopbackBaseUrlIsRefusedUnlessTheOperatorOptsIn() throws Exception {
+        var loopback = task().apiKey(Property.ofValue("abc-us19")).baseUrl(Property.ofValue("http://localhost:1234")).build();
+        var before = System.getProperty(MailchimpConnectionInterface.ALLOW_LOCAL_PROPERTY);
+        try {
+            System.clearProperty(MailchimpConnectionInterface.ALLOW_LOCAL_PROPERTY);
+            assertThat(assertThrows(IllegalArgumentException.class, () -> MailchimpConnectionInterface.baseUrl(runContextFactory.of(), loopback)).getMessage(), containsString("baseUrl"));
 
-        assertThat(assertThrows(IllegalArgumentException.class, () -> MailchimpConnectionInterface.baseUrl(runContextFactory.of(), bad)).getMessage(), containsString("baseUrl"));
-        assertThat(MailchimpConnectionInterface.baseUrl(runContextFactory.of(), good), equalTo("http://localhost:1234"));
+            System.setProperty(MailchimpConnectionInterface.ALLOW_LOCAL_PROPERTY, "true");
+            assertThat(MailchimpConnectionInterface.baseUrl(runContextFactory.of(), loopback), equalTo("http://localhost:1234"));
+        } finally {
+            if (before == null) {
+                System.clearProperty(MailchimpConnectionInterface.ALLOW_LOCAL_PROPERTY);
+            } else {
+                System.setProperty(MailchimpConnectionInterface.ALLOW_LOCAL_PROPERTY, before);
+            }
+        }
     }
 
     @Test

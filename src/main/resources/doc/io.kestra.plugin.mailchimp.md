@@ -9,7 +9,7 @@ Every task and trigger accepts the same connection properties. Store credentials
 1. **API key** (`apiKey`): the data center (`server`) is read from the key suffix, e.g. `-us19`. Set `server` only to override it.
 2. **OAuth access token** (`accessToken`): `server` is then required (for example `us19`). Run the OAuth code flow once outside Kestra, read the `dc` value from `https://login.mailchimp.com/oauth2/metadata`, and store the token as a secret.
 
-The credential is sent in an `Authorization: Bearer` header, never in the URL, and redirects are not followed. `baseUrl` replaces the API root. **It receives your credential**, so it must be an `https` `*.api.mailchimp.com` host, or `http` on `localhost` / `127.0.0.1`; anything else is rejected.
+The credential is sent in an `Authorization: Bearer` header, never in the URL, and redirects are not followed. `baseUrl` replaces the API root. **It receives your credential**, so it must be an `https` `*.api.mailchimp.com` host; anything else is rejected. Only the Kestra operator can allow `http` on `localhost` / `127.0.0.1` (for a local proxy or mock), by starting the JVM with `-Dkestra.plugin.mailchimp.allow-local-base-url=true`.
 
 ```yaml
 id: mailchimp_ping

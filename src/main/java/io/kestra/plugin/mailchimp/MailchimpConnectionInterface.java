@@ -12,6 +12,7 @@ import io.kestra.core.runners.RunContext;
 public interface MailchimpConnectionInterface {
     Pattern SERVER = Pattern.compile("^[a-z]{2,6}[0-9]{1,3}$");
     int MAX_RETRIES = 10;
+    String ALLOW_LOCAL_PROPERTY = "kestra.plugin.mailchimp.allow-local-base-url";
 
     Property<String> getApiKey();
 
@@ -91,10 +92,11 @@ public interface MailchimpConnectionInterface {
                 throw new IllegalArgumentException("'baseUrl' is not a valid URL", e);
             }
             var host = uri.getHost();
-            var local = "http".equals(uri.getScheme()) && ("localhost".equals(host) || "127.0.0.1".equals(host));
+            // loopback http is for a local proxy or mock; only the operator can switch it on, never a flow author
+            var local = Boolean.getBoolean(ALLOW_LOCAL_PROPERTY) && "http".equals(uri.getScheme()) && ("localhost".equals(host) || "127.0.0.1".equals(host));
             var mailchimp = "https".equals(uri.getScheme()) && uri.getUserInfo() == null && host != null && host.endsWith(".api.mailchimp.com");
             if (!local && !mailchimp) {
-                throw new IllegalArgumentException("'baseUrl' must be an https '*.api.mailchimp.com' host (or http on localhost / 127.0.0.1): the credential is sent to it");
+                throw new IllegalArgumentException("'baseUrl' must be an https '*.api.mailchimp.com' host: the credential is sent to it");
             }
             return url;
         }

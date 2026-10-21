@@ -51,7 +51,7 @@ public abstract class AbstractMailchimpTask extends Task implements MailchimpCon
     @Schema(
         title = "Base URL override",
         description = """
-            Replaces `https://<server>.api.mailchimp.com/3.0`. The credential is sent to this URL, so it must be an https `*.api.mailchimp.com` host, or http on localhost / 127.0.0.1."""
+            Replaces `https://<server>.api.mailchimp.com/3.0`. The credential is sent to this URL, so it must be an https `*.api.mailchimp.com` host."""
     )
     @PluginProperty(group = "connection")
     private Property<String> baseUrl;
