@@ -26,8 +26,8 @@ import io.kestra.core.utils.TestsUtils;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer;
 import io.kestra.plugin.mailchimp.FakeMailchimpServer.Response;
 import io.kestra.plugin.mailchimp.MailchimpException;
-import io.kestra.plugin.mailchimp.TriggerSupport.Row;
 import io.kestra.plugin.mailchimp.TriggerSupport;
+import io.kestra.plugin.mailchimp.TriggerSupport.Row;
 import io.kestra.plugin.mailchimp.polling.TriggerCursor;
 
 import jakarta.inject.Inject;
@@ -35,8 +35,8 @@ import jakarta.validation.ConstraintViolationException;
 
 import static io.kestra.plugin.mailchimp.TriggerSupport.cursor;
 import static io.kestra.plugin.mailchimp.TriggerSupport.drain;
-import static io.kestra.plugin.mailchimp.TriggerSupport.listServer;
 import static io.kestra.plugin.mailchimp.TriggerSupport.ids;
+import static io.kestra.plugin.mailchimp.TriggerSupport.listServer;
 import static io.kestra.plugin.mailchimp.TriggerSupport.page;
 import static io.kestra.plugin.mailchimp.TriggerSupport.vars;
 import static org.hamcrest.MatcherAssert.assertThat;

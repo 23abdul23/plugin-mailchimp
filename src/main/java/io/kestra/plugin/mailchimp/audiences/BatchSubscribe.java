@@ -16,9 +16,9 @@ import io.kestra.core.models.property.Data;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
+import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.models.MemberStatus;
 import io.kestra.plugin.mailchimp.models.SubscriberHash;
 
@@ -195,12 +195,8 @@ public class BatchSubscribe extends AbstractMailchimpTask implements RunnableTas
         runContext.render(skipDuplicateCheck).as(Boolean.class).ifPresent(v -> flags.put("skip_duplicate_check", v));
 
         // pass 1: validate every row before the first request; streaming, only a counter is kept
-        var rows = new long[1];
-        forEachRow(runContext, data, (n, raw) -> {
-            toMember(n, raw);
-            rows[0] = n;
-        });
-        var chunks = (int) ((rows[0] + rChunk - 1) / rChunk);
+        var rows = forEachRow(runContext, data, BatchSubscribe::toMember);
+        var chunks = (int) ((rows + rChunk - 1) / rChunk);
 
         var totals = new Totals();
         if (chunks > 0) {
@@ -284,9 +280,9 @@ public class BatchSubscribe extends AbstractMailchimpTask implements RunnableTas
         return listed + (more > 0 ? " and " + more + " more" : "");
     }
 
-    // the flux is cancelled (and its file closed) when a row fails, because the exception propagates through it
-    private static void forEachRow(RunContext runContext, Data data, BiConsumer<Long, Map<String, Object>> handler) throws Exception {
-        data.read(runContext).index().doOnNext(row -> handler.accept(row.getT1() + 1, row.getT2())).blockLast();
+    /** Hands every row to {@code handler} and returns how many there were; the flux is cancelled (and its file closed) when a row fails. */
+    private static long forEachRow(RunContext runContext, Data data, BiConsumer<Long, Map<String, Object>> handler) throws Exception {
+        return data.read(runContext).index().doOnNext(row -> handler.accept(row.getT1() + 1, row.getT2())).count().block();
     }
 
     @SuppressWarnings("unchecked")

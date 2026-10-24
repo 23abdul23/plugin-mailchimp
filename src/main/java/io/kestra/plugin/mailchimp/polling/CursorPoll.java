@@ -110,12 +110,7 @@ public final class CursorPoll {
         var read = new ArrayList<TriggerCursor.Item>(); // every dated row read: the cursor moves past all of them
         var fired = new ArrayList<TriggerCursor.Item>();
         var seen = new HashSet<String>();
-        var latest = new Object() {
-            TriggerCursor.Item item;
-            Map<String, Object> row;
-            TriggerCursor running = cursor; // advanced page by page, never recomputed over everything read
-            int advancedTo;
-        };
+        var latest = new Progress(cursor);
         try (var collector = Fetcher.collector(runContext, fetchType, null, spec.arrayField(), node -> {
             var item = item(node, spec, logger);
             item.ifPresent(read::add);
@@ -131,6 +126,7 @@ public final class CursorPoll {
             }
             return row;
         })) {
+            // ponytail: more than 1000 rows in one second (bulk import) are re-read on every poll; resume from a stored offset if that is expected
             client.getPagedWhile(spec.path(), query, Fetcher.PAGE_SIZE, page -> {
                 collector.accept(page);
                 latest.running = latest.running.advance(read.subList(latest.advancedTo, read.size()));
@@ -151,7 +147,18 @@ public final class CursorPoll {
         }
     }
 
-//     more than 1000 rows in one second (bulk import) are re-read on every poll; resume from a stored offset if that is expected
+    /** What one poll has seen so far; the cursor is advanced page by page, never recomputed over everything read. */
+    private static final class Progress {
+        TriggerCursor.Item item;
+        Map<String, Object> row;
+        TriggerCursor running;
+        int advancedTo;
+
+        Progress(TriggerCursor start) {
+            this.running = start;
+        }
+    }
+
     private static Optional<Instant> time(JsonNode node, String timeField) {
         try {
             return Optional.of(OffsetDateTime.parse(node.path(timeField).asText("")).toInstant());

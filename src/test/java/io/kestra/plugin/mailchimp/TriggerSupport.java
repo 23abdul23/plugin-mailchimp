@@ -88,8 +88,8 @@ public final class TriggerSupport {
             }
             Comparator<Row> order = Comparator.comparing(r -> r.time);
             selected.sort("DESC".equals(q.get("sort_dir")) ? order.reversed() : order);
-            int offset = Integer.parseInt(q.getOrDefault("offset", "0"));
-            int count = Integer.parseInt(q.getOrDefault("count", "10"));
+            var offset = Integer.parseInt(q.getOrDefault("offset", "0"));
+            var count = Integer.parseInt(q.getOrDefault("count", "10"));
             var items = selected.subList(Math.min(offset, selected.size()), Math.min(offset + count, selected.size())).stream()
                 .map(r -> member(r.id, timeField, r.time.toString(), r.status)).collect(Collectors.joining(","));
             return Response.json(200, "{\"" + arrayField + "\":[" + items + "],\"total_items\":" + selected.size() + "}");

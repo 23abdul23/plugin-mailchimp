@@ -2,9 +2,9 @@ package io.kestra.plugin.mailchimp.integration;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
-import java.util.Collection;
 import java.util.function.Predicate;
 
 import org.junit.jupiter.api.AfterEach;

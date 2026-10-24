@@ -27,8 +27,8 @@ import jakarta.validation.ConstraintViolationException;
 
 import static io.kestra.plugin.mailchimp.TriggerSupport.cursor;
 import static io.kestra.plugin.mailchimp.TriggerSupport.drain;
-import static io.kestra.plugin.mailchimp.TriggerSupport.listServer;
 import static io.kestra.plugin.mailchimp.TriggerSupport.ids;
+import static io.kestra.plugin.mailchimp.TriggerSupport.listServer;
 import static io.kestra.plugin.mailchimp.TriggerSupport.page;
 import static io.kestra.plugin.mailchimp.TriggerSupport.vars;
 import static org.hamcrest.MatcherAssert.assertThat;

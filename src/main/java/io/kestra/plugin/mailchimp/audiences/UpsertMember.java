@@ -11,9 +11,9 @@ import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
+import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.models.MemberStatus;
 import io.kestra.plugin.mailchimp.models.SubscriberHash;
 
@@ -169,8 +169,8 @@ public class UpsertMember extends AbstractMailchimpTask implements RunnableTask<
         try (var client = client(runContext)) {
             var response = client.sendForBody("PUT", "/lists/" + MailchimpClient.segment(rListId) + "/members/" + MailchimpClient.segment(hash), query, body);
             return Output.builder()
-                .id(response.path("id").asText(hash))
-                .emailAddress(response.path("email_address").asText(rEmail))
+                .id(response.path("id").asText(null))
+                .emailAddress(response.path("email_address").asText(null))
                 .status(response.path("status").asText(null))
                 .build();
         }

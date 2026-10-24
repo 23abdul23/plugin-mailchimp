@@ -10,9 +10,9 @@ import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.common.FetchType;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpFetchTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
+import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.models.FetchOutput;
 import io.kestra.plugin.mailchimp.models.Rows;
 

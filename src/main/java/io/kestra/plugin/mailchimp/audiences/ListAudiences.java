@@ -33,7 +33,7 @@ import lombok.experimental.SuperBuilder;
     description = """
         Reads the audiences (lists) of the account with `GET /lists`.
 
-        By default every page is read (1000 per request) until `maxItems` or the end. If `count` or `offset` is set, a single request honoring them is made and no further page is read.
+        By default every page is read (1000 per request) until `maxItems` or the end.
 
         Each row exposes `id`, `name`, `dateCreated`, `visibility`, `memberCount` and `unsubscribeCount` (the latter two come from `stats`); every other Mailchimp field keeps its original key."""
 )

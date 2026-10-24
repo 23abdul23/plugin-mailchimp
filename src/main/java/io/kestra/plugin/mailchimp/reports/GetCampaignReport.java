@@ -12,9 +12,9 @@ import io.kestra.core.models.annotations.PluginProperty;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.tasks.RunnableTask;
 import io.kestra.core.runners.RunContext;
-import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.AbstractMailchimpTask;
 import io.kestra.plugin.mailchimp.MailchimpClient;
+import io.kestra.plugin.mailchimp.MailchimpConnectionInterface;
 import io.kestra.plugin.mailchimp.models.Rows;
 
 import io.swagger.v3.oas.annotations.media.Schema;
