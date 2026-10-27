@@ -11,7 +11,6 @@ import io.kestra.core.models.conditions.ConditionContext;
 import io.kestra.core.models.executions.Execution;
 import io.kestra.core.models.property.Property;
 import io.kestra.core.models.triggers.TriggerContext;
-
 import io.kestra.plugin.mailchimp.models.MemberStatus;
 
 import io.swagger.v3.oas.annotations.media.Schema;
